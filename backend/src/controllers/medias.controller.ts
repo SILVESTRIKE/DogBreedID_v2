@@ -1,0 +1,250 @@
+import { Request, Response } from "express";
+import { MediaService, FindMediasOptions } from "../services/media.service";
+import { BadRequestError, NotFoundError } from "../errors";
+import { DirectoryService } from "../services/directory.service";
+import { MediaDoc } from "../models/medias.model";
+import { transformMediaURLs } from "../utils/media.util";
+
+export class MediaController {
+  // Xử lý upload 1 file
+  static async uploadSingle(req: Request, res: Response) {
+    if (!req.file) {
+      throw new BadRequestError("Không có file nào được upload.");
+    }
+
+    const { name, description, directory_id, directory_name } = req.body;
+
+    if (!name) {
+      throw new BadRequestError("Trường 'name' là bắt buộc.");
+    }
+
+    let resolvedDirectoryName: string | null = null;
+    if (directory_name) resolvedDirectoryName = directory_name;
+    else if (directory_id) {
+      const dir = await DirectoryService.findById(directory_id.toString());
+      resolvedDirectoryName = dir ? (dir.name as string) : null;
+    }
+
+    const mediaData = {
+      name: name,
+      mediaPath: req.file.path,
+      type: req.file.mimetype,
+      description: description || null,
+      creator_id: (req as any).user?._id,
+      directory_name: resolvedDirectoryName,
+    };
+
+    const newMedia = await MediaService.createMedia(mediaData);
+    res.status(201).json(transformMediaURLs(req, newMedia));
+  }
+
+  // Xử lý upload nhiều file
+  static async uploadMultiple(req: Request, res: Response) {
+    const files = req.files as Express.Multer.File[];
+    if (!files || files.length === 0) {
+      throw new BadRequestError("No files were uploaded.");
+    }
+
+    const { names, descriptions, directory_id, directory_name } = req.body;
+
+    if (!names) throw new BadRequestError("names is required.");
+    if (!descriptions) throw new BadRequestError("descriptions is required.");
+
+    const namesArray = Array.isArray(names) ? names : [names];
+    const descriptionsArray = Array.isArray(descriptions)
+      ? descriptions
+      : [descriptions];
+
+    if (files.length !== namesArray.length) {
+      throw new BadRequestError(
+        `files.length (${files.length}) must match names.length (${namesArray.length}).`
+      );
+    }
+    if (files.length !== descriptionsArray.length) {
+      throw new BadRequestError(
+        `files.length (${files.length}) must match descriptions.length (${descriptionsArray.length}).`
+      );
+    }
+
+    const mediaPromises = files.map(async (file, index) => {
+      let resolvedDirectoryName: string | null = null;
+      if (directory_name) resolvedDirectoryName = directory_name;
+      else if (directory_id) {
+        const dir = await DirectoryService.findById(directory_id.toString());
+        resolvedDirectoryName = dir ? (dir.name as string) : null;
+      }
+
+      const mediaData = {
+        name: namesArray[index],
+        mediaPath: file.path,
+        type: file.mimetype,
+        description: descriptionsArray[index],
+        creator_id: (req as any).user?._id,
+        directory_name: resolvedDirectoryName,
+      };
+      return MediaService.createMedia(mediaData);
+    });
+
+    const newMedias = await Promise.all(mediaPromises);
+    res.status(201).json(transformMediaURLs(req, newMedias));
+  }
+
+  //xử lý 1 file trả về URL
+  static async uploadAndGetUrl(req: Request, res: Response) {
+    if (!req.file) throw new BadRequestError("No file uploaded.");
+
+    const { name, description, directory_id, directory_name } = req.body;
+
+    let resolvedDirectoryName: string | null = null;
+    if (directory_name) resolvedDirectoryName = directory_name;
+    else if (directory_id) {
+      const dir = await DirectoryService.findById(directory_id.toString());
+      resolvedDirectoryName = dir ? (dir.name as string) : null;
+    }
+
+    const newMedia = await MediaService.createMedia({
+      name: name || req.file.originalname, // Lấy name từ body hoặc fallback về tên gốc
+      mediaPath: req.file.path,
+      type: req.file.mimetype,
+      description: description || null,
+      creator_id: (req as any).user?._id,
+      directory_name: resolvedDirectoryName,
+    });
+
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    const mediaURL = `${baseUrl}/${newMedia.mediaPath.replace(/\\/g, "/")}`;
+
+    res.status(201).json({ mediaURL });
+  }
+  static async getMedias(req: Request, res: Response) {
+    // req.query đã được Zod middleware validate và transform
+    const options = req.query as unknown as FindMediasOptions;
+    const result = await MediaService.findAndPaginate(options);
+    const dataWithUrl = transformMediaURLs(req, result.data);
+    res.status(200).json({ data: dataWithUrl, pagination: result.pagination });
+  }
+
+  static async getMediaById(req: Request, res: Response) {
+    // req.params.id đã được Zod middleware validate và transform thành number
+    const media_id = (req.params as any).id as number;
+
+    const media = await MediaService.findById(media_id);
+    if (!media) {
+      throw new NotFoundError(`Can't find media with ID: ${media_id}`);
+    }
+
+    res.status(200).json(transformMediaURLs(req, media));
+  }
+
+  static async updateMediaInfo(req: Request, res: Response) {
+    const id = (req.params as any).id as number;
+
+    const updatedMedia = await MediaService.updateInfoMedia(id, req.body);
+    if (!updatedMedia) {
+      throw new NotFoundError(`Can't find media with ID: ${id}`);
+    }
+
+    res.status(200).json(transformMediaURLs(req, updatedMedia));
+  }
+
+  static async deleteMedia(req: Request, res: Response) {
+    const media_id = (req.params as any).id as number;
+
+    const isDeleted = await MediaService.softDeleteMedia(media_id);
+    if (!isDeleted) {
+      throw new NotFoundError(`Can't find media with ID: ${media_id}.`);
+    }
+
+    res.status(204).send();
+  }
+  static async getFileTypeFolders(req: Request, res: Response) {
+    const fileTypes = await MediaService.getFileTypeFolders();
+    res.status(200).json(fileTypes);
+  }
+  static async getYearFolders(req: Request, res: Response) {
+    const { fileType } = req.params;
+    const years = await MediaService.getYearFolders(fileType);
+    res.status(200).json(years);
+  }
+
+  static async getMonthFolders(req: Request, res: Response) {
+    const { fileType } = req.params;
+    const { year } = req.params;
+    const months = await MediaService.getMonthFolders(fileType, year);
+    res.status(200).json(months);
+  }
+
+  static async getMediaByPhysicalPath(req: Request, res: Response) {
+    const { fileType, year, month } = req.params;
+    const options = {
+      page: req.query.page ? parseInt(req.query.page as string, 10) : 1,
+      limit: req.query.limit ? parseInt(req.query.limit as string, 10) : 50,
+      search: req.query.search as string,
+    };
+    const result = await MediaService.findAndPaginateByPhysicalPath(
+      fileType,
+      year,
+      month,
+      options
+    );
+    const transformedData = transformMediaURLs(req, result.data);
+    res
+      .status(200)
+      .json({ data: transformedData, pagination: result.pagination });
+  }
+}
+export class DirectoryController {
+  static async create(req: Request, res: Response) {
+    const newDirectory = await DirectoryService.create(
+      req.body,
+      (req as any).user?._id?.toString()
+    );
+    res.status(201).json(newDirectory);
+  }
+
+  static async getContent(req: Request, res: Response) {
+    const directory_id = req.params.id ? parseInt(req.params.id, 10) : null;
+
+    if (directory_id) {
+      const dirExists = await DirectoryService.findById(
+        directory_id!.toString()
+      );
+      if (!dirExists)
+        throw new NotFoundError(`Directory with ID ${directory_id} not exist.`);
+    }
+
+    const [subDirectories, mediaResult] = await Promise.all([
+      DirectoryService.getChildren(
+        directory_id !== null ? directory_id.toString() : null
+      ),
+      MediaService.findAndPaginate({
+        directory_name: directory_id ? String(directory_id) : null,
+        limit: 1000,
+      }),
+    ]);
+
+    res.status(200).json({
+      directories: subDirectories,
+      medias: transformMediaURLs(req, mediaResult.data),
+    });
+  }
+  static async softDelete(req: Request, res: Response) {
+    const directoryId = (req.params as any).id as number;
+
+    const directory = await DirectoryService.findById(directoryId.toString());
+    if (!directory) {
+      throw new NotFoundError(`Directory with ID ${directoryId} not exist.`);
+    }
+
+    await DirectoryService.softDeleteRecursive(directoryId.toString());
+
+    res.status(204).send();
+  }
+  static async getBreadcrumb(req: Request, res: Response) {
+    const directoryId = parseInt(req.params.id);
+    const breadcrumb = await DirectoryService.getBreadcrumb(
+      directoryId.toString()
+    );
+    res.status(200).json(breadcrumb);
+  }
+}

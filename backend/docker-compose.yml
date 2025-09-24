@@ -1,0 +1,25 @@
+version: "3.8"
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/server
+    restart: unless-stopped # Thay đổi cho development
+    depends_on:
+      - mongo
+    env_file:
+      - .env
+  mongo:
+    image: mongo:latest
+    ports:
+      - "27017:27017"
+    restart: unless-stopped # Thay đổi cho development
+    volumes:
+      - mongodata:/data/db
+volumes:
+  mongodata:
+  

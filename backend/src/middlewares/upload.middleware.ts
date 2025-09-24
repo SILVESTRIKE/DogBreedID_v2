@@ -1,0 +1,78 @@
+import multer from "multer";
+import path from "path";
+import fs from "fs";
+import crypto from "crypto";
+import { Request } from "express";
+
+const UPLOADS_DIR = "uploads";
+
+if (!fs.existsSync(UPLOADS_DIR)) {
+  fs.mkdirSync(UPLOADS_DIR);
+}
+const getFileTypeDir = (mimetype: string): string => {
+  if (mimetype.startsWith("image/")) return "images";
+  if (mimetype.startsWith("video/")) return "videos";
+  if (mimetype.startsWith("audio/")) return "audios";
+  if (mimetype === "application/pdf") return "documents";
+  return "others";
+};
+
+const storage = multer.diskStorage({
+  /**
+   * Cấu hình nơi lưu file theo cấu trúc: uploads/TYPE/YYYY/MM
+   */
+  destination: (req, file, cb) => {
+    const fileTypeDir = getFileTypeDir(file.mimetype);
+
+    const now = new Date();
+    const year = now.getFullYear().toString();
+    const month = (now.getMonth() + 1).toString().padStart(2, "0");
+
+    const fullPath = path.join(UPLOADS_DIR, fileTypeDir, year, month);
+
+    fs.mkdirSync(fullPath, { recursive: true });
+
+    cb(null, fullPath);
+  },
+
+  filename: (req, file, cb) => {
+    const now = new Date();
+    const dateString = `${String(now.getDate()).padStart(2, "0")}${String(
+      now.getMonth() + 1
+    ).padStart(2, "0")}${now.getFullYear()}`;
+    const randomChars = crypto.randomBytes(3).toString("hex").slice(0, 5);
+    const extension = path.extname(file.originalname);
+    const newFilename = `${dateString}_${randomChars}${extension}`;
+    cb(null, newFilename);
+  },
+});
+
+const allowedMimeTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/gif",
+  "image/webp",
+  "video/mp4",
+  "video/webm",
+  "application/pdf",
+];
+
+const fileFilter = (
+  req: Request,
+  file: Express.Multer.File,
+  cb: multer.FileFilterCallback
+) => {
+  if (allowedMimeTypes.includes(file.mimetype)) {
+    cb(null, true);
+  } else {
+    cb(new Error("Định dạng file không được hỗ trợ!"));
+  }
+};
+const multerOptions = {
+  storage: storage,
+  fileFilter: fileFilter,
+  limits: { fileSize: 1024 * 1024 * 20 },
+};
+
+export const uploadSingle = multer(multerOptions).single("file");
+export const uploadMultiple = multer(multerOptions).array("files", 10);

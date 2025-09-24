@@ -1,0 +1,69 @@
+import mongoose, { Schema, Document, Types } from "mongoose";
+
+interface IYoloPrediction {
+  box: number[]; // [x1, y1, x2, y2]
+  class: string;
+  confidence: number;
+}
+
+export type PredictionHistoryDoc = Document & {
+  user: Types.ObjectId;
+  imagePath: string;
+  modelUsed: string;
+  predictedClass: string;
+  confidence: number;
+  predictions: IYoloPrediction[];
+  isCorrect: boolean | null;
+};
+
+const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
+  {
+    user: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      index: true,
+    },
+    imagePath: {
+      type: String,
+      required: true,
+    },
+    modelUsed: {
+      type: String,
+      required: true,
+    },
+    predictedClass: {
+      type: String,
+      required: true,
+    },
+    confidence: {
+      type: Number,
+      required: true,
+    },
+    predictions: [
+      {
+        _id: false,
+        box: { type: [Number], required: true },
+        class: { type: String, required: true },
+        confidence: { type: Number, required: true },
+      },
+    ],
+    isCorrect: { type: Boolean, default: null },
+  },
+  {
+    timestamps: true,
+    collection: "prediction_histories",
+    toJSON: {
+      transform: (doc: any, ret: any) => {
+        ret.id = ret._id;
+        delete ret._id;
+        delete ret.__v;
+      },
+    },
+  }
+);
+
+export const PredictionHistoryModel = mongoose.model<PredictionHistoryDoc>(
+  "PredictionHistory",
+  predictionHistorySchema
+);
