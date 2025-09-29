@@ -19,6 +19,7 @@ export type AIModelDoc = Document & {
   status: ModelStatusType;
   tags: string[];
   creator_id: Types.ObjectId;
+  isDeleted: boolean;
 };
 
 const aiModelSchema = new Schema<AIModelDoc>(
@@ -56,9 +57,13 @@ const aiModelSchema = new Schema<AIModelDoc>(
       ref: "User",
       required: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
-    timestamps: true,
+    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
     collection: "ai_models",
     toJSON: {
       transform: (doc: any, ret: any) => {

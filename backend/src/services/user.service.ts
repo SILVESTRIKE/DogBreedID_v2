@@ -1,10 +1,11 @@
 import bcrypt from "bcryptjs";
 import { UserModel, UserDoc, UserRole } from "../models/user.model";
-import { OtpModel } from "../models/otp.model";
+import { OtpModel, OtpType } from "../models/otp.model";
 import { sendEmail } from "./email.service";
 import { RegisterType } from "../types/zod/user.zod";
 import mongoose, { Types, ClientSession } from "mongoose";
 import { BadRequestError, NotFoundError } from "../errors";
+import { DirectoryModel } from "../models/directory.model";
 
 export type PlainUser = {
   _id: Types.ObjectId;
@@ -56,6 +57,17 @@ export const userService = {
       const user = new UserModel({ ...data, password: hashedPassword });
       await user.save();
 
+      // Create a directory for the user
+      const directory = new DirectoryModel({
+        name: user.username,
+        creator_id: user._id,
+      });
+      await directory.save();
+
+      // Update the user with the directoryId
+      user.directoryId = directory._id;
+      await user.save();
+
       await this.sendOtp(user.email);
 
       const { password, ...plainUserResult } = user.toObject();
@@ -73,8 +85,15 @@ export const userService = {
       throw new BadRequestError("Tài khoản này đã được xác thực rồi.");
 
     const otpCode = Math.floor(100000 + Math.random() * 900000).toString();
-    await OtpModel.deleteMany({ userId: user._id });
-    await new OtpModel({ userId: user._id, otp: otpCode }).save();
+    await OtpModel.deleteMany({ email: email, type: OtpType.EMAIL_VERIFICATION });
+    
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    await new OtpModel({
+      email: email,
+      otp: otpCode,
+      type: OtpType.EMAIL_VERIFICATION,
+      expiresAt: expiresAt,
+    }).save();
 
     await sendEmail(
       user.email,
@@ -117,7 +136,7 @@ export const userService = {
     const user = await UserModel.findOne({ email });
     if (!user) throw new Error("Email không hợp lệ");
 
-    const otpRecord = await OtpModel.findOne({ userId: user._id, otp: otp });
+    const otpRecord = await OtpModel.findOne({ email: email, otp: otp });
     if (!otpRecord)
       throw new BadRequestError("OTP không hợp lệ hoặc đã hết hạn");
     await UserModel.findByIdAndUpdate(user._id, { verify: true });

@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { DirectoryDoc } from "./directory.model";
 
 export type MediaDoc = mongoose.Document & {
   _id: mongoose.Types.ObjectId;
@@ -7,7 +8,10 @@ export type MediaDoc = mongoose.Document & {
   description: string | null;
   type: string | null;
   creator_id: mongoose.Types.ObjectId;
-  directory_name: string | null;
+  directory_id: DirectoryDoc["_id"];
+  createdAt: Date;
+  updatedAt: Date;
+  // Thêm trường isDeleted để đánh dấu xóa mềm
   isDeleted: boolean;
 };
 
@@ -28,12 +32,16 @@ const mediaSchema = new mongoose.Schema<MediaDoc>(
       ref: "User",
       required: true,
     },
-    // store directory by its logical name for simplicity
-    directory_name: { type: String, default: null, index: true },
+    directory_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Directory",
+      required: true,
+      index: true,
+    },
     isDeleted: { type: Boolean, default: false, select: false },
   },
   {
-    timestamps: true, // Sử dụng timestamps của Mongoose
+    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" }, // Sử dụng timestamps của Mongoose
     collection: "medias",
     toJSON: {
       virtuals: true,

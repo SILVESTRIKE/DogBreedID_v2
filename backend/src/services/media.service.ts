@@ -13,7 +13,7 @@ export interface FindMediasOptions {
   limit?: number;
   search?: string;
   type?: string;
-  directory_name?: string | null;
+  directory_id?: string | null;
   startDate?: string; // Định dạng YYYY-MM-DD
   endDate?: string; // Định dạng YYYY-MM-DD
 }
@@ -61,13 +61,13 @@ export class MediaService {
       limit = 50,
       search,
       type,
-      directory_name,
+      directory_id,
       startDate,
       endDate,
     } = options;
 
     const filter: any = { isDeleted: false };
-    if (directory_name !== undefined) filter.directory_name = directory_name;
+    if (directory_id !== undefined) filter.directory_id = directory_id;
     if (search) filter.name = new RegExp(search, "i");
     if (type) filter.type = new RegExp(`^${type}/`, "i");
 

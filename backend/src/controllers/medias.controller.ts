@@ -12,17 +12,10 @@ export class MediaController {
       throw new BadRequestError("Không có file nào được upload.");
     }
 
-    const { name, description, directory_id, directory_name } = req.body;
+    const { name, description, directory_id } = req.body;
 
     if (!name) {
       throw new BadRequestError("Trường 'name' là bắt buộc.");
-    }
-
-    let resolvedDirectoryName: string | null = null;
-    if (directory_name) resolvedDirectoryName = directory_name;
-    else if (directory_id) {
-      const dir = await DirectoryService.findById(directory_id.toString());
-      resolvedDirectoryName = dir ? (dir.name as string) : null;
     }
 
     const mediaData = {
@@ -31,10 +24,10 @@ export class MediaController {
       type: req.file.mimetype,
       description: description || null,
       creator_id: (req as any).user?._id,
-      directory_name: resolvedDirectoryName,
+      directory_id: directory_id,
     };
 
-    const newMedia = await MediaService.createMedia(mediaData);
+    const newMedia = await MediaService.createMedia(mediaData as any);
     res.status(201).json(transformMediaURLs(req, newMedia));
   }
 
@@ -45,7 +38,7 @@ export class MediaController {
       throw new BadRequestError("No files were uploaded.");
     }
 
-    const { names, descriptions, directory_id, directory_name } = req.body;
+    const { names, descriptions, directory_id } = req.body;
 
     if (!names) throw new BadRequestError("names is required.");
     if (!descriptions) throw new BadRequestError("descriptions is required.");
@@ -67,22 +60,15 @@ export class MediaController {
     }
 
     const mediaPromises = files.map(async (file, index) => {
-      let resolvedDirectoryName: string | null = null;
-      if (directory_name) resolvedDirectoryName = directory_name;
-      else if (directory_id) {
-        const dir = await DirectoryService.findById(directory_id.toString());
-        resolvedDirectoryName = dir ? (dir.name as string) : null;
-      }
-
       const mediaData = {
         name: namesArray[index],
         mediaPath: file.path,
         type: file.mimetype,
         description: descriptionsArray[index],
         creator_id: (req as any).user?._id,
-        directory_name: resolvedDirectoryName,
+        directory_id: directory_id,
       };
-      return MediaService.createMedia(mediaData);
+      return MediaService.createMedia(mediaData as any);
     });
 
     const newMedias = await Promise.all(mediaPromises);
@@ -93,14 +79,7 @@ export class MediaController {
   static async uploadAndGetUrl(req: Request, res: Response) {
     if (!req.file) throw new BadRequestError("No file uploaded.");
 
-    const { name, description, directory_id, directory_name } = req.body;
-
-    let resolvedDirectoryName: string | null = null;
-    if (directory_name) resolvedDirectoryName = directory_name;
-    else if (directory_id) {
-      const dir = await DirectoryService.findById(directory_id.toString());
-      resolvedDirectoryName = dir ? (dir.name as string) : null;
-    }
+    const { name, description, directory_id } = req.body;
 
     const newMedia = await MediaService.createMedia({
       name: name || req.file.originalname, // Lấy name từ body hoặc fallback về tên gốc
@@ -108,8 +87,8 @@ export class MediaController {
       type: req.file.mimetype,
       description: description || null,
       creator_id: (req as any).user?._id,
-      directory_name: resolvedDirectoryName,
-    });
+      directory_id: directory_id,
+    } as any);
 
     const baseUrl = `${req.protocol}://${req.get("host")}`;
     const mediaURL = `${baseUrl}/${newMedia.mediaPath.replace(/\\/g, "/")}`;
@@ -203,22 +182,18 @@ export class DirectoryController {
   }
 
   static async getContent(req: Request, res: Response) {
-    const directory_id = req.params.id ? parseInt(req.params.id, 10) : null;
+    const directory_id = req.params.id ? req.params.id : null;
 
     if (directory_id) {
-      const dirExists = await DirectoryService.findById(
-        directory_id!.toString()
-      );
+      const dirExists = await DirectoryService.findById(directory_id);
       if (!dirExists)
         throw new NotFoundError(`Directory with ID ${directory_id} not exist.`);
     }
 
     const [subDirectories, mediaResult] = await Promise.all([
-      DirectoryService.getChildren(
-        directory_id !== null ? directory_id.toString() : null
-      ),
+      DirectoryService.getChildren(directory_id),
       MediaService.findAndPaginate({
-        directory_name: directory_id ? String(directory_id) : null,
+        directory_id: directory_id,
         limit: 1000,
       }),
     ]);

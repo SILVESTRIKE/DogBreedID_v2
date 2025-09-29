@@ -17,18 +17,34 @@ const getFileTypeDir = (mimetype: string): string => {
   return "others";
 };
 
+const getWeekOfMonth = (date: Date) => {
+  const startOfMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+  const dayOfMonth = date.getDate();
+  // Adjust for Sunday being 0
+  const dayOfWeek = startOfMonth.getDay() === 0 ? 6 : startOfMonth.getDay() - 1;
+  return Math.ceil((dayOfMonth + dayOfWeek) / 7);
+};
+
 const storage = multer.diskStorage({
   /**
    * Cấu hình nơi lưu file theo cấu trúc: uploads/TYPE/YYYY/MM
    */
-  destination: (req, file, cb) => {
-    const fileTypeDir = getFileTypeDir(file.mimetype);
-
+  destination: (req: Request, file, cb) => {
     const now = new Date();
     const year = now.getFullYear().toString();
     const month = (now.getMonth() + 1).toString().padStart(2, "0");
 
-    const fullPath = path.join(UPLOADS_DIR, fileTypeDir, year, month);
+    let fullPath: string;
+
+    if (req.user) {
+      // Logged-in user
+      const fileTypeDir = getFileTypeDir(file.mimetype);
+      fullPath = path.join(UPLOADS_DIR, fileTypeDir, year, month);
+    } else {
+      // Anonymous user
+      const week = `week-${getWeekOfMonth(now)}`;
+      fullPath = path.join(UPLOADS_DIR, "test", year, month, week);
+    }
 
     fs.mkdirSync(fullPath, { recursive: true });
 

@@ -11,6 +11,9 @@ export type OtpDoc = Document & {
   otp: string;
   type: OtpType;
   expiresAt: Date;
+  isDeleted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 const otpSchema = new Schema<OtpDoc>(
@@ -32,15 +35,21 @@ const otpSchema = new Schema<OtpDoc>(
       type: Date,
       required: true,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     collection: "otps",
-    timestamps: true,
+    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
     toJSON: {
       transform: (doc: any, ret: any) => {
         ret.id = ret._id;
         delete ret._id;
         delete ret.__v;
+        delete ret.otp;
+        delete ret.isDeleted;
       },
     },
   }

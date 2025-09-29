@@ -9,10 +9,10 @@ export const authLimiter = rateLimit({
 });
 
 export const guestUploadLimiter = rateLimit({
-  windowMs: 24 * 60 * 60 * 1000,
+  windowMs: 7 * 24 * 60 * 60 * 1000, // 1 week
   max: 1,
   message:
-    "Bạn chỉ được upload 1 ảnh/ngày với tư cách khách. Vui lòng đăng ký để sử dụng nhiều hơn.",
+    "Bạn chỉ được upload 1 ảnh/tuần với tư cách khách. Vui lòng đăng ký để sử dụng nhiều hơn.",
   standardHeaders: true,
   legacyHeaders: false,
 });

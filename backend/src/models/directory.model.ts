@@ -25,7 +25,7 @@ const directorySchema = new mongoose.Schema<DirectoryDoc>(
     isDeleted: { type: Boolean, default: false, select: false },
   },
   {
-    timestamps: true,
+    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
     collection: "directories",
     toJSON: {
       virtuals: true,

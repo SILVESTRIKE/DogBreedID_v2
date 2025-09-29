@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Auth & Prediction API Test</title>
+    <style>
+      body {
+        font-family: sans-serif;
+      }
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .form-group {
+        margin-bottom: 15px;
+      }
+      label {
+        display: block;
+        margin-bottom: 5px;
+      }
+      input {
+        width: 100%;
+        padding: 8px;
+        box-sizing: border-box;
+      }
+      button {
+        padding: 10px 15px;
+        cursor: pointer;
+      }
+      pre {
+        background-color: #f4f4f4;
+        padding: 10px;
+        border: 1px solid #ddd;
+        white-space: pre-wrap;
+        word-wrap: break-word;
+      }
+      h2 {
+        border-bottom: 1px solid #ccc;
+        padding-bottom: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Auth & Prediction API Test</h1>
+
+      <!-- Prediction Upload -->
+      <h2>Prediction Upload</h2>
+      <form id="predictionForm">
+        <div class="form-group">
+          <label for="predictionFile">Image File</label>
+          <input type="file" id="predictionFile" name="file" required />
+        </div>
+        <div class="form-group">
+          <label for="predictionToken"
+            >Auth Token (optional for guest upload)</label
+          >
+          <input
+            type="text"
+            id="predictionToken"
+            name="token"
+            placeholder="Paste accessToken here to test as a logged-in user"
+          />
+        </div>
+        <button type="submit">Upload and Predict</button>
+      </form>
+      <pre id="predictionResult"></pre>
+
+      <!-- Video Upload -->
+      <h2>Video Upload</h2>
+      <form id="videoForm">
+        <div class="form-group">
+          <label for="videoFile">Video File</label>
+          <input type="file" id="videoFile" name="file" required />
+        </div>
+        <div class="form-group">
+          <label for="videoToken">Auth Token</label>
+          <input
+            type="text"
+            id="videoToken"
+            name="token"
+            placeholder="Paste accessToken here"
+          />
+        </div>
+        <button type="submit">Upload Video</button>
+      </form>
+      <pre id="videoResult"></pre>
+
+      <!-- Register -->
+      <h2>Register</h2>
+      <form id="registerForm">
+        <div class="form-group">
+          <label for="registerName">Username</label>
+          <input type="text" id="registerName" name="username" required />
+        </div>
+        <div class="form-group">
+          <label for="registerEmail">Email</label>
+          <input type="email" id="registerEmail" name="email" required />
+        </div>
+        <div class="form-group">
+          <label for="registerPassword">Password</label>
+          <input
+            type="password"
+            id="registerPassword"
+            name="password"
+            required
+          />
+        </div>
+        <button type="submit">Register</button>
+      </form>
+      <pre id="registerResult"></pre>
+
+      <!-- Login -->
+      <h2>Login</h2>
+      <form id="loginForm">
+        <div class="form-group">
+          <label for="loginEmail">Email</label>
+          <input type="email" id="loginEmail" name="email" required />
+        </div>
+        <div class="form-group">
+          <label for="loginPassword">Password</label>
+          <input type="password" id="loginPassword" name="password" required />
+        </div>
+        <button type="submit">Login</button>
+      </form>
+      <pre id="loginResult"></pre>
+
+      <!-- Logout -->
+      <h2>Logout</h2>
+      <form id="logoutForm">
+        <div class="form-group">
+          <label for="logoutRefreshToken">Refresh Token</label>
+          <input
+            type="text"
+            id="logoutRefreshToken"
+            name="refreshToken"
+            required
+          />
+        </div>
+        <button type="submit">Logout</button>
+      </form>
+      <pre id="logoutResult"></pre>
+
+      <!-- Refresh Token -->
+      <h2>Refresh Token</h2>
+      <form id="refreshTokenForm">
+        <div class="form-group">
+          <label for="refreshToken">Refresh Token</label>
+          <input type="text" id="refreshToken" name="refreshToken" required />
+        </div>
+        <button type="submit">Refresh</button>
+      </form>
+      <pre id="refreshTokenResult"></pre>
+
+      <!-- Verify Email -->
+      <h2>Verify Email</h2>
+      <form id="verifyEmailForm">
+        <div class="form-group">
+          <label for="verifyEmail">Email</label>
+          <input type="email" id="verifyEmail" name="email" required />
+        </div>
+        <div class="form-group">
+          <label for="verifyOtp">OTP</label>
+          <input type="text" id="verifyOtp" name="otp" required />
+        </div>
+        <button type="submit">Verify Email</button>
+      </form>
+      <pre id="verifyEmailResult"></pre>
+
+      <!-- Resend Verification OTP -->
+      <h2>Resend Verification OTP</h2>
+      <form id="resendOtpForm">
+        <div class="form-group">
+          <label for="resendOtpEmail">Email</label>
+          <input type="email" id="resendOtpEmail" name="email" required />
+        </div>
+        <button type="submit">Resend OTP</button>
+      </form>
+      <pre id="resendOtpResult"></pre>
+
+      <!-- Forgot Password -->
+      <h2>Forgot Password</h2>
+      <form id="forgotPasswordForm">
+        <div class="form-group">
+          <label for="forgotPasswordEmail">Email</label>
+          <input type="email" id="forgotPasswordEmail" name="email" required />
+        </div>
+        <button type="submit">Send Reset Link</button>
+      </form>
+      <pre id="forgotPasswordResult"></pre>
+
+      <!-- Reset Password -->
+      <h2>Reset Password</h2>
+      <form id="resetPasswordForm">
+        <div class="form-group">
+          <label for="resetPasswordEmail">Email</label>
+          <input type="email" id="resetPasswordEmail" name="email" required />
+        </div>
+        <div class="form-group">
+          <label for="resetPasswordToken">Token</label>
+          <input type="text" id="resetPasswordToken" name="token" required />
+        </div>
+        <div class="form-group">
+          <label for="resetPasswordPassword">New Password</label>
+          <input
+            type="password"
+            id="resetPasswordPassword"
+            name="password"
+            required
+          />
+        </div>
+        <button type="submit">Reset Password</button>
+      </form>
+    </div>
+
+    <script>
+      const handleFormSubmit = async (formId, resultId, endpoint) => {
+        const form = document.getElementById(formId);
+        const resultEl = document.getElementById(resultId);
+
+        form.addEventListener("submit", async (e) => {
+          e.preventDefault();
+          const formData = new FormData(form);
+          const data = Object.fromEntries(formData.entries());
+
+          try {
+            const response = await fetch(endpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(data),
+            });
+            const result = await response.json();
+            resultEl.textContent = JSON.stringify(result, null, 2);
+
+            // Auto-fill token and email fields
+            if (formId === 'registerForm' || formId === 'loginForm') {
+                const email = data.email;
+                if(email) {
+                    document.getElementById('verifyEmail').value = email;
+                    document.getElementById('resendOtpEmail').value = email;
+                    document.getElementById('forgotPasswordEmail').value = email;
+                    document.getElementById('resetPasswordEmail').value = email;
+                }
+            }
+            if ((formId === 'loginForm' || formId === 'refreshTokenForm') && result.accessToken) {
+              document.getElementById('predictionToken').value = result.accessToken;
+              document.getElementById('videoToken').value = result.accessToken;
+            }
+             if (formId === 'loginForm' && result.refreshToken) {
+              document.getElementById('logoutRefreshToken').value = result.refreshToken;
+              document.getElementById('refreshToken').value = result.refreshToken;
+            }
+          } catch (error) {
+            resultEl.textContent = `Error: ${error.message}`;
+          }
+        });
+      };
+
+      handleFormSubmit("registerForm", "registerResult", "/api/auth/register");
+      handleFormSubmit("loginForm", "loginResult", "/api/auth/login");
+      handleFormSubmit("logoutForm", "logoutResult", "/api/auth/logout");
+      handleFormSubmit(
+        "refreshTokenForm",
+        "refreshTokenResult",
+        "/api/auth/refresh-token"
+      );
+      handleFormSubmit(
+        "verifyEmailForm",
+        "verifyEmailResult",
+        "/api/auth/verify-email"
+      );
+      handleFormSubmit(
+        "resendOtpForm",
+        "resendOtpResult",
+        "/api/auth/resend-verification-otp"
+      );
+      handleFormSubmit(
+        "forgotPasswordForm",
+        "forgotPasswordResult",
+        "/api/auth/forgot-password"
+      );
+      handleFormSubmit(
+        "resetPasswordForm",
+        "resetPasswordResult",
+        "/api/auth/reset-password"
+      );
+
+      // Handle Prediction Form (multipart/form-data)
+      const predictionForm = document.getElementById("predictionForm");
+      const predictionResultEl = document.getElementById("predictionResult");
+
+      predictionForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        predictionResultEl.textContent = "Uploading and predicting...";
+        const formData = new FormData(predictionForm);
+        const token = formData.get("token");
+        formData.delete("token"); // remove token from form data being sent
+
+        const headers = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        try {
+          const response = await fetch("/api/predictions", {
+            method: "POST",
+            headers: headers,
+            body: formData,
+          });
+          const result = await response.json();
+          predictionResultEl.textContent = JSON.stringify(result, null, 2);
+        } catch (error) {
+          predictionResultEl.textContent = `Error: ${error.message}`;
+        }
+      });
+      // Handle Video Upload Form (multipart/form-data)
+      const videoForm = document.getElementById("videoForm");
+      const videoResultEl = document.getElementById("videoResult");
+
+      videoForm.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        videoResultEl.textContent = "Uploading video...";
+        const formData = new FormData(videoForm);
+        const token = formData.get("token");
+        formData.delete("token");
+
+        const headers = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
+        try {
+                const response = await fetch('/api/medias/upload-video', {
+            method: "POST",
+            headers: headers,
+            body: formData,
+          });
+          const result = await response.json();
+          videoResultEl.textContent = JSON.stringify(result, null, 2);
+        } catch (error) {
+          videoResultEl.textContent = `Error: ${error.message}`;
+        }
+      });
+    </script>
+  </body>
+</html>

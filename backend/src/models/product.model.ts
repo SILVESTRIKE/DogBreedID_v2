@@ -6,6 +6,7 @@ export type ProductDoc = Document & {
   quantity: number;
   slug: string;
   price: number;
+  isDeleted: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -16,6 +17,10 @@ const productSchema = new Schema<ProductDoc>(
     quantity: { type: Number, required: true, min: 0 },
     slug: { type: String, required: true, unique: true },
     price: { type: Number, required: true, min: 0 },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
     timestamps: true,

@@ -1,19 +1,31 @@
 import mongoose, { Schema, Document, Types } from "mongoose";
+import { MediaDoc } from "./medias.model";
 
+interface Speed {
+  preprocess: number;
+  inference: number;
+  postprocess: number;
+  total: number;
+}
 interface IYoloPrediction {
   box: number[]; // [x1, y1, x2, y2]
   class: string;
   confidence: number;
+  speed?: Speed;
 }
 
 export type PredictionHistoryDoc = Document & {
   user: Types.ObjectId;
+  media: MediaDoc["_id"];
   imagePath: string;
   modelUsed: string;
   predictedClass: string;
   confidence: number;
   predictions: IYoloPrediction[];
   isCorrect: boolean | null;
+  isDeleted: boolean;
+  createdAt: Date;
+  updatedAt: Date;
 };
 
 const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
@@ -21,6 +33,12 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
     user: {
       type: Schema.Types.ObjectId,
       ref: "User",
+      required: true,
+      index: true,
+    },
+    media: {
+      type: Schema.Types.ObjectId,
+      ref: "Media",
       required: true,
       index: true,
     },
@@ -46,12 +64,23 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
         box: { type: [Number], required: true },
         class: { type: String, required: true },
         confidence: { type: Number, required: true },
+        speed: {
+          _id: false,
+          preprocess: { type: Number, required: true },
+          inference: { type: Number, required: true },
+          postprocess: { type: Number, required: true },
+          total: { type: Number, required: true },
+        },
       },
     ],
     isCorrect: { type: Boolean, default: null },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
-    timestamps: true,
+    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
     collection: "prediction_histories",
     toJSON: {
       transform: (doc: any, ret: any) => {

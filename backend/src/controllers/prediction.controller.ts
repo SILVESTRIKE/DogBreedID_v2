@@ -8,12 +8,8 @@ export const predictionController = {
       throw new BadRequestError("Không có file nào được upload.");
     }
 
-    const userId = (req as any).user?._id; // Lấy userId từ middleware xác thực
-    const imagePath = req.file.path; // Đường dẫn file ảnh đã lưu
-
-    if (!userId) {
-      throw new BadRequestError("Không tìm thấy thông tin người dùng.");
-    }
+    const userId = (req as any).user?._id; // userId can be undefined
+    const imagePath = req.file.path;
 
     const predictionResult = await predictionService.makePrediction(
       userId,

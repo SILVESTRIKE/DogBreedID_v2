@@ -1,5 +1,5 @@
 import mongoose, { Document, Schema } from "mongoose";
-
+import { DirectoryDoc } from "./directory.model.js";
 export type UserRole = "user" | "premium" | "admin";
 
 export type UserDoc = Document & {
@@ -9,12 +9,13 @@ export type UserDoc = Document & {
   role: UserRole;
   verify: boolean;
   isDeleted: boolean;
-
+  directory_id: string;
   photoUploadsThisWeek: number;
   videoUploadsThisWeek: number;
   lastUsageResetAt: Date;
   createdAt: Date;
   updatedAt: Date;
+  directoryId: DirectoryDoc["_id"];
 };
 
 const userSchema = new Schema<UserDoc>(
@@ -43,6 +44,11 @@ const userSchema = new Schema<UserDoc>(
       default: "user",
       required: true,
     },
+    directoryId: {
+      type: Schema.Types.ObjectId,
+      ref: "Directory",
+      // required: true, // Tạm thời bỏ required để giải quyết vấn đề con gà quả trứng
+    },
     verify: {
       type: Boolean,
       default: false,
@@ -67,7 +73,7 @@ const userSchema = new Schema<UserDoc>(
     },
   },
   {
-    timestamps: true,
+    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
     collection: "users",
     toJSON: {
       transform: (doc: any, ret: any) => {

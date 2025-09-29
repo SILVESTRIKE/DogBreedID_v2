@@ -7,6 +7,7 @@ export type RefreshTokenDoc = Document & {
   token: string;
   expiresAt: Date;
   used: boolean;
+  isDeleted: boolean;
 };
 
 const refreshTokenSchema = new Schema<RefreshTokenDoc>(
@@ -34,9 +35,13 @@ const refreshTokenSchema = new Schema<RefreshTokenDoc>(
       type: Boolean,
       default: false,
     },
+    isDeleted: {
+      type: Boolean,
+      default: false,
+    },
   },
   {
-    timestamps: true,
+    timestamps: { createdAt: "createdAt", updatedAt: "updatedAt" },
     collection: "refresh_tokens",
   }
 );
