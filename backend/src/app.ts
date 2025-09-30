@@ -7,8 +7,8 @@ import { errorHandlerMiddleware } from "./middlewares/errorHandler.middleware";
 import { configureViewEngine } from "./config/viewEngine";
 
 import authRoutes from "./routes/auth.route";
-import userRoutes from "././routes/user.route";
-import predictionRoutes from "./routes/prediction.route";
+import userRoutes from "./routes/user.route";
+import { predictionRoutes } from "./routes/prediction.route";
 
 dotenv.config();
 const app = express();
@@ -30,7 +30,6 @@ app.get("/test", (req, res) => {
 app.use(authRoutes);
 app.use(userRoutes);
 app.use(predictionRoutes);
-
 app.use(errorHandlerMiddleware);
 
 export default app;

@@ -237,22 +237,28 @@
             resultEl.textContent = JSON.stringify(result, null, 2);
 
             // Auto-fill token and email fields
-            if (formId === 'registerForm' || formId === 'loginForm') {
-                const email = data.email;
-                if(email) {
-                    document.getElementById('verifyEmail').value = email;
-                    document.getElementById('resendOtpEmail').value = email;
-                    document.getElementById('forgotPasswordEmail').value = email;
-                    document.getElementById('resetPasswordEmail').value = email;
-                }
+            if (formId === "registerForm" || formId === "loginForm") {
+              const email = data.email;
+              if (email) {
+                document.getElementById("verifyEmail").value = email;
+                document.getElementById("resendOtpEmail").value = email;
+                document.getElementById("forgotPasswordEmail").value = email;
+                document.getElementById("resetPasswordEmail").value = email;
+              }
             }
-            if ((formId === 'loginForm' || formId === 'refreshTokenForm') && result.accessToken) {
-              document.getElementById('predictionToken').value = result.accessToken;
-              document.getElementById('videoToken').value = result.accessToken;
+            if (
+              (formId === "loginForm" || formId === "refreshTokenForm") &&
+              result.accessToken
+            ) {
+              document.getElementById("predictionToken").value =
+                result.accessToken;
+              document.getElementById("videoToken").value = result.accessToken;
             }
-             if (formId === 'loginForm' && result.refreshToken) {
-              document.getElementById('logoutRefreshToken').value = result.refreshToken;
-              document.getElementById('refreshToken').value = result.refreshToken;
+            if (formId === "loginForm" && result.refreshToken) {
+              document.getElementById("logoutRefreshToken").value =
+                result.refreshToken;
+              document.getElementById("refreshToken").value =
+                result.refreshToken;
             }
           } catch (error) {
             resultEl.textContent = `Error: ${error.message}`;
@@ -312,7 +318,13 @@
             body: formData,
           });
           const result = await response.json();
-          predictionResultEl.textContent = JSON.stringify(result, null, 2);
+          if (response.ok) {
+            predictionResultEl.textContent = JSON.stringify(result, null, 2);
+          } else {
+            predictionResultEl.textContent = `Error: ${
+              response.status
+            } - ${JSON.stringify(result, null, 2)}`;
+          }
         } catch (error) {
           predictionResultEl.textContent = `Error: ${error.message}`;
         }
@@ -334,13 +346,19 @@
         }
 
         try {
-                const response = await fetch('/api/medias/upload-video', {
+          const response = await fetch("/api/predictions", {
             method: "POST",
             headers: headers,
             body: formData,
           });
           const result = await response.json();
-          videoResultEl.textContent = JSON.stringify(result, null, 2);
+          if (response.ok) {
+            videoResultEl.textContent = JSON.stringify(result, null, 2);
+          } else {
+            videoResultEl.textContent = `Error: ${
+              response.status
+            } - ${JSON.stringify(result, null, 2)}`;
+          }
         } catch (error) {
           videoResultEl.textContent = `Error: ${error.message}`;
         }

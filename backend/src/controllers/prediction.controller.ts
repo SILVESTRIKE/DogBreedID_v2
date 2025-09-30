@@ -7,15 +7,11 @@ export const predictionController = {
     if (!req.file) {
       throw new BadRequestError("Không có file nào được upload.");
     }
-
-    const userId = (req as any).user?._id; // userId can be undefined
-    const imagePath = req.file.path;
-
+    const userId = (req as any).user?._id;
     const predictionResult = await predictionService.makePrediction(
       userId,
-      imagePath
+      req.file
     );
-
-    res.status(200).json(predictionResult);
+    res.status(201).json(predictionResult);
   },
 };

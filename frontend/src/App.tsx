@@ -6,23 +6,43 @@ import { Camera, Heart, Shield, Zap, Users, Award, Upload, Search, Check, Mail, 
 import { ImageWithFallback } from "./components/figma/ImageWithFallback";
 import { Navbar } from "./components/Navbar";
 import { UploadZone } from "./components/UploadZone";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { authService } from "./services/auth.service";
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [user, setUser] = useState(null);
   const [userPredictions, setUserPredictions] = useState(0);
   const [predictionResult, setPredictionResult] = useState(null);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [email, setEmail] = useState("");
 
-  const handleLogin = (email: string, password: string) => {
-    // Mock login - in real app, this would call an API
-    setIsLoggedIn(true);
-    setUserPredictions(0); // Reset predictions for new login
+  useEffect(() => {
+    const token = localStorage.getItem("accessToken");
+    if (token) {
+      setIsLoggedIn(true);
+      // You might want to fetch user profile here using the token
+    }
+  }, []);
+
+  const handleLogin = async (email, password) => {
+    try {
+      const { user, accessToken, refreshToken } = await authService.login(email, password);
+      localStorage.setItem("accessToken", accessToken);
+      localStorage.setItem("refreshToken", refreshToken);
+      setIsLoggedIn(true);
+      setUser(user);
+      setUserPredictions(0); // Reset predictions for new login
+    } catch (error) {
+      alert(error.message);
+    }
   };
 
   const handleLogout = () => {
+    localStorage.removeItem("accessToken");
+    localStorage.removeItem("refreshToken");
     setIsLoggedIn(false);
+    setUser(null);
     setUserPredictions(0);
   };
 

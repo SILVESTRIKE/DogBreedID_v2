@@ -1,20 +1,24 @@
 import axios from "axios";
-import { PredictionHistoryModel } from "../models/prediction_history.model";
-import { BadRequestError } from "../errors";
-import mongoose from "mongoose";
-import { UserModel } from "../models/user.model";
-import { MediaModel } from "../models/medias.model";
+import FormData from "form-data";
+import fs from "fs";
 import path from "path";
-
-import { DirectoryModel } from "../models/directory.model";
+import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 
-// Cấu hình URL của AI Service Python
+import {
+  PredictionHistoryModel,
+  PredictionHistoryDoc,
+} from "../models/prediction_history.model";
+import { UserModel } from "../models/user.model";
+import { MediaModel } from "../models/medias.model";
+import { DirectoryModel } from "../models/directory.model";
+import { BadRequestError } from "../errors";
+
+// Lấy URL của AI service từ biến môi trường, với giá trị mặc định
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
-// Cấu hình base URL của Node.js server để Python có thể tải ảnh
-const NODE_BASE_URL = process.env.NODE_BASE_URL || "http://localhost:3000";
 
 export const predictionService = {
+  // Hàm này giữ nguyên để xử lý user guest
   getGuestUser: async () => {
     const guestEmail = "guest@dogbreedid.com";
     let guestUser = await UserModel.findOne({ email: guestEmail });
@@ -44,11 +48,11 @@ export const predictionService = {
 
   async makePrediction(
     userId: mongoose.Types.ObjectId | undefined,
-    imagePath: string
-  ): Promise<any> {
-    if (!imagePath) {
-      throw new BadRequestError("Đường dẫn ảnh không hợp lệ.");
-    }
+    file: Express.Multer.File
+  ): Promise<PredictionHistoryDoc> {
+    if (!file) throw new BadRequestError("Không có file nào được cung cấp.");
+
+    const { path: imagePath, originalname: originalFilename } = file;
 
     let user;
     if (userId) {
@@ -57,11 +61,8 @@ export const predictionService = {
       user = await predictionService.getGuestUser();
     }
 
-    if (!user || !user.directoryId) {
-      throw new BadRequestError(
-        "Không tìm thấy thông tin người dùng hoặc thư mục."
-      );
-    }
+    if (!user || !user.directoryId)
+      throw new BadRequestError("Không tìm thấy thông tin người dùng.");
 
     const newMedia = new MediaModel({
       name: path.basename(imagePath),
@@ -72,30 +73,52 @@ export const predictionService = {
     });
     await newMedia.save();
 
-    const publicImageUrl = `${NODE_BASE_URL}/${imagePath.replace(/\\/g, "/")}`;
-
     try {
-      const response = await axios.post(`${AI_SERVICE_URL}/predict`, {
-        image_url: publicImageUrl,
+      const formData = new FormData();
+      formData.append("file", fs.createReadStream(imagePath), {
+        filename: originalFilename,
+      });
+
+      const response = await axios.post(`${AI_SERVICE_URL}/predict`, formData, {
+        headers: { ...formData.getHeaders() },
+        timeout: 30000,
       });
 
       const predictionResult = response.data;
+      if (!predictionResult || !predictionResult.predictions) {
+        throw new Error("Kết quả trả về từ AI service không hợp lệ.");
+      }
 
       const newPrediction = await PredictionHistoryModel.create({
         user: user._id,
         media: newMedia._id,
-        imagePath: imagePath,
+        imagePath,
         predictedClass: predictionResult.predictions[0]?.class || "unknown",
         confidence: predictionResult.predictions[0]?.confidence || 0,
         predictions: predictionResult.predictions,
         modelUsed: "YOLOv8",
       });
 
+      // Cập nhật số lượt đã dùng cho user đã đăng nhập
+      if (userId) {
+        await UserModel.updateOne(
+          { _id: userId },
+          { $inc: { photoUploadsThisWeek: 1 } }
+        );
+      }
+
       return newPrediction;
     } catch (error: any) {
-      console.error("Lỗi khi gọi AI Service hoặc lưu dự đoán:", error.message);
+      await MediaModel.findByIdAndDelete(newMedia._id);
+      fs.unlink(imagePath, (err) => {
+        if (err) console.error("Failed to delete temp file:", imagePath);
+      });
+      console.error(
+        "Lỗi khi gọi AI Service:",
+        error.response?.data || error.message
+      );
       throw new BadRequestError(
-        "Không thể thực hiện dự đoán. Vui lòng thử lại."
+        "Không thể thực hiện dự đoán. Vui lòng thử lại sau."
       );
     }
   },

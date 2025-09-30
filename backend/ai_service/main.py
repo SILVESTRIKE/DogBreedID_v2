@@ -1,92 +1,95 @@
-import asyncio
-import base64
-import json
+# main.py
+import uvicorn
+from fastapi import FastAPI, File, UploadFile
+from fastapi.responses import JSONResponse
+from ultralytics import YOLO
 import cv2
 import numpy as np
-from ultralytics import YOLO
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException
-import uvicorn
-import os
+import io
+import logging
 
-app = FastAPI()
-#demo
-# Load model once (heavy op)
-# Use environment variable for model path, default to 'best.pt'
-MODEL_PATH = os.getenv("dog_breed_classifier.onnx", "dog_breed_classifier.onnx")
-model = None
+# ==============================================================================
+# 1. KHỞI TẠO APP VÀ LOAD MODEL
+# ==============================================================================
+app = FastAPI(
+    title="Dog Breed Inference API",
+    description="An API to predict dog breeds using a YOLOv8 model.",
+    version="1.0.0"
+)
+
+# Load model sẵn một lần duy nhất khi service khởi động
+# Đảm bảo file 'best_model.pt' nằm cùng thư mục hoặc cung cấp đường dẫn đúng
 try:
-    model = YOLO(MODEL_PATH)   # path tới .pt của bạn
-    # Optionally warmup the model
-    model.predict(np.zeros((640, 640, 3), dtype=np.uint8), verbose=False)
-    print(f"YOLOv8 model loaded successfully from {MODEL_PATH}")
+    model = YOLO("best_model.pt")
+    print("YOLO model loaded successfully.")
 except Exception as e:
-    print(f"Error loading YOLOv8 model from {MODEL_PATH}: {e}")
-    print("Predictions will not be available until the model is loaded correctly.")
+    print(f"Error loading YOLO model: {e}")
+    model = None
 
-async def decode_image_b64(b64str):
-    b = base64.b64decode(b64str)
-    arr = np.frombuffer(b, np.uint8)
-    img = cv2.imdecode(arr, cv2.IMREAD_COLOR)  # BGR
-    return img
+# ==============================================================================
+# 2. HÀM HỖ TRỢ (HELPER FUNCTION)
+# ==============================================================================
+def process_results_to_json(results, model_names):
+    #Chuyển đổi kết quả từ model YOLO thành một list JSON có cấu trúc.
+    detections = []
+    if not results:
+        return detections
 
-def detections_to_json(results, model):
-    out = []
     for r in results:
-        boxes = r.boxes      # Boxes object
-        for box in boxes:
-            cls_id = int(box.cls[0])
-            conf = float(box.conf[0])
-            xyxy = [float(x) for x in box.xyxy[0].tolist()]  # x1,y1,x2,y2
-            out.append({
-                "class_id": cls_id,
-                "class_name": model.names.get(cls_id, str(cls_id)),
-                "confidence": conf,
-                "bbox": xyxy
+        for box in r.boxes:
+            detections.append({
+                "class": model_names[int(box.cls)],
+                "confidence": float(box.conf),
+                "box": box.xyxy.tolist()[0],
             })
-    return out
+    return detections
 
-@app.websocket("/ws/infer")
-async def websocket_infer(ws: WebSocket):
-    if model is None:
-        # If model failed to load, refuse WebSocket connection or send error
-        await ws.close(code=1011, reason="AI model not loaded on server.")
-        return
+# ==============================================================================
+# 3. API ENDPOINT
+# ==============================================================================
+@app.get("/", summary="Health Check")
+def health_check():
+    """Kiểm tra xem service có đang hoạt động không."""
+    return JSONResponse(content={"status": "ok", "message": "YOLOv8 Inference Service is running."})
 
-    await ws.accept()
+@app.post("/predict", summary="Predict from Image File")
+async def predict_from_file(file: UploadFile = File(..., description="Image file to perform prediction on.")):
+    """
+    Nhận một file ảnh, thực hiện dự đoán và trả về các đối tượng được phát hiện.
+    """
+    if not model:
+        return JSONResponse(
+            content={"status": "error", "message": "Model is not loaded on the server"}, 
+            status_code=503 # Service Unavailable
+        )
+    
     try:
-        while True:
-            msg = await ws.receive_text()
-            # Expect JSON: {"id": "...", "image": "<base64 str>", "meta": {...}}
-            data = json.loads(msg)
-            frame_b64 = data.get("image")
-            req_id = data.get("id", None)
-            if not frame_b64:
-                await ws.send_text(json.dumps({"error":"no_image","id":req_id}))
-                continue
+        # Đọc nội dung file vào memory dưới dạng bytes
+        contents = await file.read()
+        
+        # Chuyển bytes thành một numpy array mà OpenCV có thể đọc được
+        nparr = np.frombuffer(contents, np.uint8)
+        img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-            # decode
-            img = await decode_image_b64(frame_b64)  # BGR np array
-            if img is None:
-                await ws.send_text(json.dumps({"error":"image_decode_failed","id":req_id}))
-                continue
+        if img is None:
+            return JSONResponse(content={"status": "error", "message": "Could not decode the provided file as an image."}, status_code=400)
 
-            # run inference (synchronous call)
-            # set conf/filter/specific params as needed
-            results = model.predict(img, conf=0.35, imgsz=640, verbose=False)
-            det_json = detections_to_json(results, model)
-            # return structured JSON with same id (so Node/FE can match)
-            resp = {"id": req_id, "detections": det_json}
-            await ws.send_text(json.dumps(resp))
-    except WebSocketDisconnect:
-        print("client disconnected")
+        # Thực hiện dự đoán trực tiếp trên ảnh (numpy array)
+        results = model.predict(source=img, conf=0.25, save=False, verbose=False)
+        logging.basicConfig(level=logging.DEBUG)
+        logging.debug(f"Raw model results: {results}")
+        # Xử lý và trả về kết quả
+        output_detections = process_results_to_json(results, model.names)
+
+        # Trả về đúng cấu trúc mà Node.js mong đợi
+        return JSONResponse(content={"predictions": output_detections})
+
     except Exception as e:
-        print("error in ws:", e)
-        try:
-            await ws.send_text(json.dumps({"error":str(e)}))
-        except:
-            pass
+        return JSONResponse(content={"status": "error", "message": f"An internal error occurred: {str(e)}"}, status_code=500)
 
+# ==============================================================================
+# 4. CHẠY SERVER
+# ==============================================================================
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="127.0.0.1", port=9001, workers=1)
-#cd d:/DoAnTotNghiep/backend/ai_service
-#uvicorn main:app --host 0.0.0.0 --port 9001 --workers 1
+    # Chạy server với Uvicorn. host="0.0.0.0" để có thể truy cập từ bên ngoài container/máy ảo
+    uvicorn.run(app, host="0.0.0.0", port=8000)

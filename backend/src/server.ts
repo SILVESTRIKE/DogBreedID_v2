@@ -20,7 +20,7 @@ const startServer = async () => {
 
   const PORT = process.env.PORT || 3000;
   app.listen(PORT, () => {
-    console.log(`HTTP Server đang chạy trên cổng ${PORT}`);
+    console.log(`HTTP Server đang chạy trên cổng: http://localhost:${PORT}`);
   });
 };
 
