@@ -21,6 +21,7 @@ async function sendOtpEmail(
 ) {
   try {
     await sendEmail(email, subject, text.replace("{{otp}}", otp));
+    console.log("Noi dung email:", text.replace("{{otp}}", otp));
   } catch (error) {
     console.error("Lỗi gửi mail:", error);
     throw new Error("Không thể gửi email");
