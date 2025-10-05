@@ -11,12 +11,11 @@ import {
   GetMediasQuerySchema,
 } from "../types/zod/medias.zod";
 import { uploadSingle, uploadMultiple } from "../middlewares/upload.middleware";
-import { authMiddleware } from "../middlewares/auth.middleware";
+// import { authMiddleware } from "../middlewares/auth.middleware";
 import { roleMiddleware } from "../middlewares/role.middleware";
 
 const router = Router();
 
-router.use(authMiddleware);
 
 // =================================================================
 // I. MEDIA UPLOAD ROUTES
@@ -65,6 +64,7 @@ router.get(
   validateData(GetByIdParamsSchema, "params"),
   MediaController.getMediaById
 );
+router.get("/api/medias/stream/:folder(processed-videos|processed-images)/:filename", MediaController.streamMedia);
 
 // 2.3. Cập nhật thông tin (name, description) của một media.
 router.post(
@@ -160,4 +160,4 @@ router.get(
   MediaController.getMediaByPhysicalPath
 );
 
-export { router as mediaRouter };
+export { router as mediasRouter };

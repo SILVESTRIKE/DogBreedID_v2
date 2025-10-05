@@ -1,368 +1,369 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Auth & Prediction API Test</title>
-    <style>
-      body {
-        font-family: sans-serif;
-      }
-      .container {
-        max-width: 800px;
-        margin: 0 auto;
-        padding: 20px;
-      }
-      .form-group {
-        margin-bottom: 15px;
-      }
-      label {
-        display: block;
-        margin-bottom: 5px;
-      }
-      input {
-        width: 100%;
-        padding: 8px;
-        box-sizing: border-box;
-      }
-      button {
-        padding: 10px 15px;
-        cursor: pointer;
-      }
-      pre {
-        background-color: #f4f4f4;
-        padding: 10px;
-        border: 1px solid #ddd;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-      }
-      h2 {
-        border-bottom: 1px solid #ccc;
-        padding-bottom: 10px;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>Auth & Prediction API Test</h1>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Auth & Prediction API Test</title>
+  <style>
+    body { font-family: sans-serif; background-color: #f9f9f9; color: #333; }
+    .container { max-width: 800px; margin: 0 auto; padding: 20px; background-color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    .form-group { margin-bottom: 15px; }
+    label { display: block; margin-bottom: 5px; font-weight: bold; }
+    input[type="text"], input[type="email"], input[type="password"] { width: 100%; padding: 8px; box-sizing: border-box; border: 1px solid #ccc; border-radius: 4px; }
+    button { padding: 10px 15px; cursor: pointer; background-color: #007bff; color: white; border: none; border-radius: 4px; }
+    button:disabled { background-color: #ccc; cursor: not-allowed; }
+    pre { background-color: #f4f4f4; padding: 10px; border: 1px solid #ddd; white-space: pre-wrap; word-wrap: break-word; min-height: 50px; border-radius: 4px; }
+    h1, h2 { border-bottom: 2px solid #007bff; padding-bottom: 10px; }
+    #realtimeContainer { position: relative; width: 100%; max-width: 640px; aspect-ratio: 4 / 3; background-color: #333; margin-top: 10px; }
+    #realtimeVideo, #realtimeCanvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+    #realtimeCanvas { z-index: 10; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Auth & Prediction API Test</h1>
 
-      <!-- Prediction Upload -->
-      <h2>Prediction Upload</h2>
-      <form id="predictionForm">
-        <div class="form-group">
-          <label for="predictionFile">Image File</label>
-          <input type="file" id="predictionFile" name="file" required />
-        </div>
-        <div class="form-group">
-          <label for="predictionToken"
-            >Auth Token (optional for guest upload)</label
-          >
-          <input
-            type="text"
-            id="predictionToken"
-            name="token"
-            placeholder="Paste accessToken here to test as a logged-in user"
-          />
-        </div>
-        <button type="submit">Upload and Predict</button>
-      </form>
-      <pre id="predictionResult"></pre>
-
-      <!-- Video Upload -->
-      <h2>Video Upload</h2>
-      <form id="videoForm">
-        <div class="form-group">
-          <label for="videoFile">Video File</label>
-          <input type="file" id="videoFile" name="file" required />
-        </div>
-        <div class="form-group">
-          <label for="videoToken">Auth Token</label>
-          <input
-            type="text"
-            id="videoToken"
-            name="token"
-            placeholder="Paste accessToken here"
-          />
-        </div>
-        <button type="submit">Upload Video</button>
-      </form>
-      <pre id="videoResult"></pre>
-
-      <!-- Register -->
-      <h2>Register</h2>
-      <form id="registerForm">
-        <div class="form-group">
-          <label for="registerName">Username</label>
-          <input type="text" id="registerName" name="username" required />
-        </div>
-        <div class="form-group">
-          <label for="registerEmail">Email</label>
-          <input type="email" id="registerEmail" name="email" required />
-        </div>
-        <div class="form-group">
-          <label for="registerPassword">Password</label>
-          <input
-            type="password"
-            id="registerPassword"
-            name="password"
-            required
-          />
-        </div>
-        <button type="submit">Register</button>
-      </form>
-      <pre id="registerResult"></pre>
-
-      <!-- Login -->
-      <h2>Login</h2>
-      <form id="loginForm">
-        <div class="form-group">
-          <label for="loginEmail">Email</label>
-          <input type="email" id="loginEmail" name="email" required />
-        </div>
-        <div class="form-group">
-          <label for="loginPassword">Password</label>
-          <input type="password" id="loginPassword" name="password" required />
-        </div>
-        <button type="submit">Login</button>
-      </form>
-      <pre id="loginResult"></pre>
-
-      <!-- Logout -->
-      <h2>Logout</h2>
-      <form id="logoutForm">
-        <div class="form-group">
-          <label for="logoutRefreshToken">Refresh Token</label>
-          <input
-            type="text"
-            id="logoutRefreshToken"
-            name="refreshToken"
-            required
-          />
-        </div>
-        <button type="submit">Logout</button>
-      </form>
-      <pre id="logoutResult"></pre>
-
-      <!-- Refresh Token -->
-      <h2>Refresh Token</h2>
-      <form id="refreshTokenForm">
-        <div class="form-group">
-          <label for="refreshToken">Refresh Token</label>
-          <input type="text" id="refreshToken" name="refreshToken" required />
-        </div>
-        <button type="submit">Refresh</button>
-      </form>
-      <pre id="refreshTokenResult"></pre>
-
-      <!-- Verify Email -->
-      <h2>Verify Email</h2>
-      <form id="verifyEmailForm">
-        <div class="form-group">
-          <label for="verifyEmail">Email</label>
-          <input type="email" id="verifyEmail" name="email" required />
-        </div>
-        <div class="form-group">
-          <label for="verifyOtp">OTP</label>
-          <input type="text" id="verifyOtp" name="otp" required />
-        </div>
-        <button type="submit">Verify Email</button>
-      </form>
-      <pre id="verifyEmailResult"></pre>
-
-      <!-- Resend Verification OTP -->
-      <h2>Resend Verification OTP</h2>
-      <form id="resendOtpForm">
-        <div class="form-group">
-          <label for="resendOtpEmail">Email</label>
-          <input type="email" id="resendOtpEmail" name="email" required />
-        </div>
-        <button type="submit">Resend OTP</button>
-      </form>
-      <pre id="resendOtpResult"></pre>
-
-      <!-- Forgot Password -->
-      <h2>Forgot Password</h2>
-      <form id="forgotPasswordForm">
-        <div class="form-group">
-          <label for="forgotPasswordEmail">Email</label>
-          <input type="email" id="forgotPasswordEmail" name="email" required />
-        </div>
-        <button type="submit">Send Reset Link</button>
-      </form>
-      <pre id="forgotPasswordResult"></pre>
-
-      <!-- Reset Password -->
-      <h2>Reset Password</h2>
-      <form id="resetPasswordForm">
-        <div class="form-group">
-          <label for="resetPasswordEmail">Email</label>
-          <input type="email" id="resetPasswordEmail" name="email" required />
-        </div>
-        <div class="form-group">
-          <label for="resetPasswordToken">Token</label>
-          <input type="text" id="resetPasswordToken" name="token" required />
-        </div>
-        <div class="form-group">
-          <label for="resetPasswordPassword">New Password</label>
-          <input
-            type="password"
-            id="resetPasswordPassword"
-            name="password"
-            required
-          />
-        </div>
-        <button type="submit">Reset Password</button>
-      </form>
+    <!-- ==================== AUTH SECTIONS ==================== -->
+    <h2>Authentication</h2>
+    <div style="display: flex; gap: 20px;">
+      <div style="flex: 1;">
+        <h3>Register</h3>
+        <form id="registerForm">
+          <div class="form-group"><label for="registerName">Username</label><input type="text" id="registerName" name="username" required /></div>
+          <div class="form-group"><label for="registerEmail">Email</label><input type="email" id="registerEmail" name="email" required /></div>
+          <div class="form-group"><label for="registerPassword">Password</label><input type="password" id="registerPassword" name="password" required /></div>
+          <button type="submit">Register</button>
+        </form>
+        <pre id="registerResult"></pre>
+      </div>
+      <div style="flex: 1;">
+        <h3>Login</h3>
+        <form id="loginForm">
+          <div class="form-group"><label for="loginEmail">Email</label><input type="email" id="loginEmail" name="email" required /></div>
+          <div class="form-group"><label for="loginPassword">Password</label><input type="password" id="loginPassword" name="password" required /></div>
+          <button type="submit">Login</button>
+        </form>
+        <pre id="loginResult"></pre>
+      </div>
     </div>
 
-    <script>
-      const handleFormSubmit = async (formId, resultId, endpoint) => {
-        const form = document.getElementById(formId);
-        const resultEl = document.getElementById(resultId);
+    <!-- ==================== FILE UPLOAD SECTIONS ==================== -->
+    <h2>File Prediction</h2>
+    <div style="display: flex; gap: 20px;">
+        <div style="flex: 1;">
+            <h3>Image Upload</h3>
+            <form id="predictionForm">
+              <div class="form-group"><label for="predictionFile">Image File</label><input type="file" id="predictionFile" name="file" accept="image/*" required /></div>
+              <div class="form-group"><label for="predictionToken">Auth Token (auto-filled on login)</label><input type="text" id="predictionToken" name="token" readonly /></div>
+              <button type="submit">Upload and Predict Image</button>
+            </form>
+            <div id="imageResultContainer" style="margin-top: 15px;"></div>
+            <pre id="predictionResult"></pre>
+        </div>
+        <div style="flex: 1;">
+            <h3>Video Upload</h3>
+            <form id="videoForm">
+              <div class="form-group"><label for="videoFile">Video File</label><input type="file" id="videoFile" name="file" accept="video/*" required /></div>
+              <div class="form-group"><label for="videoToken">Auth Token (auto-filled on login)</label><input type="text" id="videoToken" name="token" readonly /></div>
+              <button type="submit">Upload and Predict Video</button>
+            </form>
+            <div id="videoResultContainer" style="margin-top: 15px;"></div>
+            <pre id="videoResult"></pre>
+        </div>
+    </div>
 
-        form.addEventListener("submit", async (e) => {
-          e.preventDefault();
-          const formData = new FormData(form);
-          const data = Object.fromEntries(formData.entries());
+    <!-- ==================== REAL-TIME PREDICTION ==================== -->
+    <h2>Real-time Prediction</h2>
+    <div class="form-group">
+      <button id="startRealtimeBtn">Start Webcam</button>
+      <button id="stopRealtimeBtn" disabled>Stop Webcam</button>
+    </div>
+    <div id="realtimeContainer">
+      <video id="realtimeVideo" autoplay playsinline muted></video>
+      <canvas id="realtimeCanvas"></canvas>
+    </div>
+    <pre id="realtimeResult">Status: Idle</pre>
 
-          try {
-            const response = await fetch(endpoint, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify(data),
-            });
-            const result = await response.json();
-            resultEl.textContent = JSON.stringify(result, null, 2);
+    <!-- ==================== AUTOMATED TEST SECTION ==================== -->
+    <h2>Automated End-to-End Test</h2>
+    <button id="startFullTestBtn">Start Full Test</button>
+    <pre id="fullTestResult">Test status: Idle</pre>
+  </div>
 
-            // Auto-fill token and email fields
-            if (formId === "registerForm" || formId === "loginForm") {
-              const email = data.email;
-              if (email) {
-                document.getElementById("verifyEmail").value = email;
-                document.getElementById("resendOtpEmail").value = email;
-                document.getElementById("forgotPasswordEmail").value = email;
-                document.getElementById("resetPasswordEmail").value = email;
-              }
-            }
-            if (
-              (formId === "loginForm" || formId === "refreshTokenForm") &&
-              result.accessToken
-            ) {
-              document.getElementById("predictionToken").value =
-                result.accessToken;
-              document.getElementById("videoToken").value = result.accessToken;
-            }
-            if (formId === "loginForm" && result.refreshToken) {
-              document.getElementById("logoutRefreshToken").value =
-                result.refreshToken;
-              document.getElementById("refreshToken").value =
-                result.refreshToken;
-            }
-          } catch (error) {
-            resultEl.textContent = `Error: ${error.message}`;
-          }
-        });
+  <script>
+    // =======================================================================
+    // API CLIENT WITH AUTOMATIC TOKEN REFRESH
+    // =======================================================================
+    const api = (() => {
+      let accessToken = null;
+      let refreshToken = null;
+
+      const setTokens = (newTokens) => {
+        accessToken = newTokens.accessToken;
+        refreshToken = newTokens.refreshToken;
+        document.getElementById("predictionToken").value = accessToken;
+        document.getElementById("videoToken").value = accessToken;
       };
 
-      handleFormSubmit("registerForm", "registerResult", "/api/auth/register");
-      handleFormSubmit("loginForm", "loginResult", "/api/auth/login");
-      handleFormSubmit("logoutForm", "logoutResult", "/api/auth/logout");
-      handleFormSubmit(
-        "refreshTokenForm",
-        "refreshTokenResult",
-        "/api/auth/refresh-token"
-      );
-      handleFormSubmit(
-        "verifyEmailForm",
-        "verifyEmailResult",
-        "/api/auth/verify-email"
-      );
-      handleFormSubmit(
-        "resendOtpForm",
-        "resendOtpResult",
-        "/api/auth/resend-verification-otp"
-      );
-      handleFormSubmit(
-        "forgotPasswordForm",
-        "forgotPasswordResult",
-        "/api/auth/forgot-password"
-      );
-      handleFormSubmit(
-        "resetPasswordForm",
-        "resetPasswordResult",
-        "/api/auth/reset-password"
-      );
+      const clearTokens = () => {
+        accessToken = null;
+        refreshToken = null;
+        document.getElementById("predictionToken").value = "";
+        document.getElementById("videoToken").value = "";
+      };
 
-      // Handle Prediction Form (multipart/form-data)
-      const predictionForm = document.getElementById("predictionForm");
-      const predictionResultEl = document.getElementById("predictionResult");
-
-      predictionForm.addEventListener("submit", async (e) => {
-        e.preventDefault();
-        predictionResultEl.textContent = "Uploading and predicting...";
-        const formData = new FormData(predictionForm);
-        const token = formData.get("token");
-        formData.delete("token"); // remove token from form data being sent
-
-        const headers = {};
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
+      const fetchWithAuth = async (url, options = {}) => {
+        if (!options.headers) options.headers = {};
+        if (accessToken && !options.headers["Authorization"]) {
+          options.headers["Authorization"] = `Bearer ${accessToken}`;
         }
+        
+        let response = await fetch(url, options);
+
+        if (response.status === 401 && refreshToken) {
+          try {
+            console.log("Access token expired. Refreshing...");
+            const refreshResponse = await fetch("/api/auth/refresh-token", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ refreshToken }),
+            });
+
+            if (!refreshResponse.ok) throw new Error("Refresh token failed.");
+            
+            const newTokens = await refreshResponse.json();
+            setTokens(newTokens);
+            console.log("Token refreshed successfully.");
+            
+            options.headers["Authorization"] = `Bearer ${accessToken}`;
+            response = await fetch(url, options); // Retry the original request
+          } catch (err) {
+            console.error("Could not refresh token:", err);
+            clearTokens();
+            throw err; // Re-throw the error to be caught by the caller
+          }
+        }
+        return response;
+      };
+
+      return { setTokens, fetch: fetchWithAuth };
+    })();
+
+    // =======================================================================
+    // FORM HANDLERS
+    // =======================================================================
+
+    /** Handles JSON-based forms like login and register */
+    function setupAuthForm(formId, resultId, endpoint) {
+      const form = document.getElementById(formId);
+      const resultEl = document.getElementById(resultId);
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        resultEl.textContent = "Loading...";
+        const formData = new FormData(form);
+        const data = Object.fromEntries(formData.entries());
 
         try {
-          const response = await fetch("/api/predictions", {
+          const response = await api.fetch(endpoint, {
             method: "POST",
-            headers: headers,
-            body: formData,
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(data),
           });
+
           const result = await response.json();
-          if (response.ok) {
-            predictionResultEl.textContent = JSON.stringify(result, null, 2);
+          if (!response.ok) throw result;
+
+          if (formId === "loginForm" && result.accessToken) {
+            api.setTokens(result);
+            resultEl.textContent = "SUCCESS: Tokens received and stored.";
           } else {
-            predictionResultEl.textContent = `Error: ${
-              response.status
-            } - ${JSON.stringify(result, null, 2)}`;
+            resultEl.textContent = JSON.stringify(result, null, 2);
           }
         } catch (error) {
-          predictionResultEl.textContent = `Error: ${error.message}`;
+          resultEl.textContent = `Error: ${JSON.stringify(error, null, 2)}`;
         }
       });
-      // Handle Video Upload Form (multipart/form-data)
-      const videoForm = document.getElementById("videoForm");
-      const videoResultEl = document.getElementById("videoResult");
+    }
 
-      videoForm.addEventListener("submit", async (e) => {
+    /** Handles multipart/form-data forms for file uploads */
+    function setupMultipartForm(formId, resultId, containerId, endpoint) {
+      const form = document.getElementById(formId);
+      const resultEl = document.getElementById(resultId);
+      const containerEl = document.getElementById(containerId);
+
+      form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        videoResultEl.textContent = "Uploading video...";
-        const formData = new FormData(videoForm);
-        const token = formData.get("token");
-        formData.delete("token");
-
-        const headers = {};
-        if (token) {
-          headers["Authorization"] = `Bearer ${token}`;
-        }
+        resultEl.textContent = 'Uploading and processing, please wait...';
+        if (containerEl) containerEl.innerHTML = '';
 
         try {
-          const response = await fetch("/api/predictions", {
-            method: "POST",
-            headers: headers,
-            body: formData,
+          const response = await api.fetch(endpoint, {
+            method: 'POST',
+            body: new FormData(form),
           });
+          
           const result = await response.json();
-          if (response.ok) {
-            videoResultEl.textContent = JSON.stringify(result, null, 2);
-          } else {
-            videoResultEl.textContent = `Error: ${
-              response.status
-            } - ${JSON.stringify(result, null, 2)}`;
+          if (!response.ok) throw result;
+
+          resultEl.textContent = JSON.stringify(result, null, 2);
+
+          const mediaPath = result.data?.processedMediaPath;
+          if (mediaPath && containerEl) {
+            const isVideo = mediaPath.endsWith('.mp4');
+            const mediaElement = document.createElement(isVideo ? 'video' : 'img');
+            mediaElement.src = mediaPath;
+            mediaElement.style.maxWidth = '100%';
+            mediaElement.style.marginTop = '15px';
+            if (isVideo) {
+              mediaElement.controls = true;
+            }
+            containerEl.appendChild(mediaElement);
           }
         } catch (error) {
-          videoResultEl.textContent = `Error: ${error.message}`;
+          resultEl.textContent = `Error: ${JSON.stringify(error, null, 2)}`;
         }
       });
-    </script>
-  </body>
+    }
+
+    // Initialize all forms
+    setupAuthForm("registerForm", "registerResult", "/api/auth/register");
+    setupAuthForm("loginForm", "loginResult", "/api/auth/login");
+    setupMultipartForm("predictionForm", "predictionResult", "imageResultContainer", "/api/predictions/image");
+    setupMultipartForm("videoForm", "videoResult", "videoResultContainer", "/api/predictions/video");
+
+    // =======================================================================
+    // REAL-TIME PREDICTION (WEBSOCKET)
+    // =======================================================================
+    const startBtn = document.getElementById("startRealtimeBtn");
+    const stopBtn = document.getElementById("stopRealtimeBtn");
+    const videoEl = document.getElementById("realtimeVideo");
+    const canvasEl = document.getElementById("realtimeCanvas");
+    const realtimeResultEl = document.getElementById("realtimeResult");
+    const ctx = canvasEl.getContext("2d");
+    let realtimeSocket, frameInterval, videoStream;
+
+    const startRealtimePrediction = async () => {
+      try {
+        videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
+        videoEl.srcObject = videoStream;
+        videoEl.onloadedmetadata = () => {
+          canvasEl.width = videoEl.videoWidth;
+          canvasEl.height = videoEl.videoHeight;
+          videoEl.play();
+        };
+      } catch (err) {
+        realtimeResultEl.textContent = "Error: Could not access camera.";
+        return;
+      }
+      
+      const WS_URL = `ws://${window.location.host}/predict/stream`;
+      realtimeSocket = new WebSocket(WS_URL);
+      
+      realtimeSocket.onopen = () => {
+        realtimeResultEl.textContent = "Status: Connected. Starting prediction...";
+        frameInterval = setInterval(() => sendFrame(), 100); // 10 fps
+      };
+      
+      realtimeSocket.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        if (data.status === "ok") drawBoxes(data.detections);
+      };
+
+      realtimeSocket.onclose = () => stopRealtimePrediction();
+      realtimeSocket.onerror = (err) => {
+        realtimeResultEl.textContent = "Status: WebSocket Error.";
+        console.error("WebSocket Error:", err);
+      };
+
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+    };
+
+    const stopRealtimePrediction = () => {
+      if (frameInterval) clearInterval(frameInterval);
+      if (realtimeSocket) realtimeSocket.close();
+      if (videoStream) videoStream.getTracks().forEach((track) => track.stop());
+      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+      realtimeResultEl.textContent = "Status: Idle";
+      startBtn.disabled = false;
+      stopBtn.disabled = true;
+    };
+
+    const sendFrame = () => {
+      if (realtimeSocket?.readyState === WebSocket.OPEN) {
+        ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+        realtimeSocket.send(canvasEl.toDataURL("image/jpeg", 0.7));
+      }
+    };
+
+    const drawBoxes = (detections) => {
+      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+      ctx.drawImage(videoEl, 0, 0, canvasEl.width, canvasEl.height);
+      ctx.strokeStyle = "#00FF00";
+      ctx.lineWidth = 3;
+      ctx.font = "18px sans-serif";
+      ctx.fillStyle = "#00FF00";
+      detections.forEach((det) => {
+        const [x1, y1, x2, y2] = det.box;
+        ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+        const label = `${det.class} (${(det.confidence * 100).toFixed(1)}%)`;
+        ctx.fillText(label, x1, y1 > 20 ? y1 - 10 : y1 + 20);
+      });
+    };
+
+    startBtn.addEventListener("click", startRealtimePrediction);
+    stopBtn.addEventListener("click", stopRealtimePrediction);
+
+    // =======================================================================
+    // AUTOMATED E2E TEST SCRIPT
+    // =======================================================================
+    const startFullTestBtn = document.getElementById("startFullTestBtn");
+    const fullTestResultEl = document.getElementById("fullTestResult");
+
+    const runFullTest = async () => {
+      startFullTestBtn.disabled = true;
+      fullTestResultEl.textContent = "";
+      const log = (message) => { fullTestResultEl.textContent += message + "\n"; };
+      const logStep = (message) => log(`\n[BƯỚC] ${message}`);
+      const logSuccess = (message) => log(`  ✓ ${message}`);
+      const logError = (message) => log(`  ✗ ${message}`);
+
+      try {
+        const BASE_URL = "/api";
+        const ADMIN_CREDENTIALS = { email: "admin@example.com", password: "adminpassword" };
+        const NEW_USER_CREDENTIALS = { username: `testuser_${Date.now()}`, email: `testuser_${Date.now()}@example.com`, password: "password123" };
+        
+        const apiCall = async (endpoint, method = "GET", body = null, token = null) => {
+          const headers = { "Content-Type": "application/json" };
+          if (token) headers["Authorization"] = `Bearer ${token}`;
+          const response = await fetch(endpoint, { method, headers, body: body ? JSON.stringify(body) : null });
+          const result = await response.json();
+          if (!response.ok) throw result;
+          return result;
+        };
+
+        logStep("Đăng nhập Admin...");
+        const adminLoginRes = await apiCall(`${BASE_URL}/auth/login`, "POST", ADMIN_CREDENTIALS);
+        logSuccess("Đăng nhập Admin thành công.");
+
+        logStep("Đăng ký người dùng mới...");
+        await apiCall(`${BASE_URL}/auth/register`, "POST", NEW_USER_CREDENTIALS);
+        logSuccess(`Đăng ký ${NEW_USER_CREDENTIALS.email} thành công.`);
+
+        // Note: Cần có endpoint để dọn dẹp (xóa user) để test này hoàn chỉnh
+        logStep("Dọn dẹp (bỏ qua)...");
+
+        log("\n====================================");
+        log("    TẤT CẢ CÁC BƯỚC ĐÃ THÀNH CÔNG!    ");
+        log("====================================");
+      } catch (error) {
+        logError(`Test thất bại: ${JSON.stringify(error)}`);
+      } finally {
+        startFullTestBtn.disabled = false;
+      }
+    };
+    startFullTestBtn.addEventListener("click", runFullTest);
+  </script>
+</body>
 </html>

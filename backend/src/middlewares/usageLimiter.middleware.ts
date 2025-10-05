@@ -26,7 +26,7 @@ const guestLimiter = rateLimit({
 });
 
 // 2. Middleware chính, xử lý logic cho người dùng đã đăng nhập
-export const checkUsageLimit = (type: "photo" | "video") => {
+export const checkUsageLimit = (type: "image" | "video") => {
   return async (req: Request, res: Response, next: NextFunction) => {
     const user = (req as any).user;
 
@@ -59,7 +59,7 @@ export const checkUsageLimit = (type: "photo" | "video") => {
       // Kiểm tra giới hạn
       if (dbUser.role === "user") {
         if (
-          type === "photo" &&
+          type === "image" &&
           dbUser.photoUploadsThisWeek >= LIMITS.user.photo
         ) {
           return next(

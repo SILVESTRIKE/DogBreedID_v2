@@ -1,12 +1,15 @@
-# main.py
 import uvicorn
 from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
 from ultralytics import YOLO
 import cv2
 import numpy as np
-import io
-import logging
+import tempfile
+import os
+import uuid
+import base64
+import traceback
+from fastapi import WebSocket, WebSocketDisconnect
 
 # ==============================================================================
 # 1. KHỞI TẠO APP VÀ LOAD MODEL
@@ -14,11 +17,9 @@ import logging
 app = FastAPI(
     title="Dog Breed Inference API",
     description="An API to predict dog breeds using a YOLOv8 model.",
-    version="1.0.0"
+    version="5.0.0"
 )
 
-# Load model sẵn một lần duy nhất khi service khởi động
-# Đảm bảo file 'best_model.pt' nằm cùng thư mục hoặc cung cấp đường dẫn đúng
 try:
     model = YOLO("best_model.pt")
     print("YOLO model loaded successfully.")
@@ -27,21 +28,19 @@ except Exception as e:
     model = None
 
 # ==============================================================================
-# 2. HÀM HỖ TRỢ (HELPER FUNCTION)
+# 2. HÀM HỖ TRỢ
 # ==============================================================================
 def process_results_to_json(results, model_names):
-    #Chuyển đổi kết quả từ model YOLO thành một list JSON có cấu trúc.
     detections = []
-    if not results:
+    if not results or not results[0].boxes:
         return detections
-
-    for r in results:
-        for box in r.boxes:
-            detections.append({
-                "class": model_names[int(box.cls)],
-                "confidence": float(box.conf),
-                "box": box.xyxy.tolist()[0],
-            })
+    
+    for box in results[0].boxes:
+        detections.append({
+            "class": model_names[int(box.cls)],
+            "confidence": float(box.conf),
+            "box": [round(coord) for coord in box.xyxy.tolist()[0]],
+        })
     return detections
 
 # ==============================================================================
@@ -49,47 +48,148 @@ def process_results_to_json(results, model_names):
 # ==============================================================================
 @app.get("/", summary="Health Check")
 def health_check():
-    """Kiểm tra xem service có đang hoạt động không."""
     return JSONResponse(content={"status": "ok", "message": "YOLOv8 Inference Service is running."})
 
-@app.post("/predict", summary="Predict from Image File")
-async def predict_from_file(file: UploadFile = File(..., description="Image file to perform prediction on.")):
-    """
-    Nhận một file ảnh, thực hiện dự đoán và trả về các đối tượng được phát hiện.
-    """
+@app.post("/predict", summary="Predict multiple objects and return a base64 visualized image")
+async def predict_from_image_file(file: UploadFile = File(...)):
     if not model:
-        return JSONResponse(
-            content={"status": "error", "message": "Model is not loaded on the server"}, 
-            status_code=503 # Service Unavailable
-        )
-    
+        return JSONResponse(content={"status": "error", "message": "Model is not loaded"}, status_code=503)
     try:
-        # Đọc nội dung file vào memory dưới dạng bytes
         contents = await file.read()
-        
-        # Chuyển bytes thành một numpy array mà OpenCV có thể đọc được
         nparr = np.frombuffer(contents, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
         if img is None:
-            return JSONResponse(content={"status": "error", "message": "Could not decode the provided file as an image."}, status_code=400)
-
-        # Thực hiện dự đoán trực tiếp trên ảnh (numpy array)
+            return JSONResponse(content={"status": "error", "message": "Could not decode image."}, status_code=400)
+        
         results = model.predict(source=img, conf=0.25, save=False, verbose=False)
-        logging.basicConfig(level=logging.DEBUG)
-        logging.debug(f"Raw model results: {results}")
-        # Xử lý và trả về kết quả
         output_detections = process_results_to_json(results, model.names)
+        output_detections = sorted(output_detections, key=lambda x: x['confidence'], reverse=True)
+        
+        image_to_draw = img.copy()
+        for det in output_detections:
+            box = det['box']; label = f"{det['class']} ({det['confidence']:.2f})"
+            cv2.rectangle(image_to_draw, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
+            cv2.putText(image_to_draw, label, (box[0], box[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+        _, buffer = cv2.imencode('.jpg', image_to_draw)
+        processed_image_base64 = base64.b64encode(buffer).decode('utf-8')
 
-        # Trả về đúng cấu trúc mà Node.js mong đợi
-        return JSONResponse(content={"predictions": output_detections})
-
+        return JSONResponse(content={
+            "predictions": output_detections,
+            "processed_media_base64": processed_image_base64,
+            "media_type": "image/jpeg"
+        })
     except Exception as e:
+        traceback.print_exc()
         return JSONResponse(content={"status": "error", "message": f"An internal error occurred: {str(e)}"}, status_code=500)
+
+@app.post("/predict-video", summary="Process Video and return a base64 processed video")
+async def predict_from_video_file(file: UploadFile = File(...)):
+    if not model:
+        return JSONResponse(content={"status": "error", "message": "Model is not loaded"}, status_code=503)
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
+        contents = await file.read()
+        tmp.write(contents)
+        tmp_path = tmp.name
+
+    try:
+        cap = cv2.VideoCapture(tmp_path)
+        if not cap.isOpened():
+            return JSONResponse(content={"status": "error", "message": "Could not open video file."}, status_code=400)
+
+        original_fps = int(cap.get(cv2.CAP_PROP_FPS))
+        frame_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        frame_height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        
+        tracked_objects = {}
+        frame_count = 0
+        frame_skip = max(1, round(original_fps / 10))
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret: break
+            
+            if frame_count % frame_skip == 0:
+                results = model.track(source=frame, conf=0.5, persist=True, verbose=False, tracker="bytetrack.yaml")
+                
+                if results[0].boxes.id is not None:
+                    boxes = results[0].boxes.xyxy.cpu().numpy().astype(int)
+                    track_ids = results[0].boxes.id.cpu().numpy().astype(int)
+                    confs = results[0].boxes.conf.cpu().numpy()
+                    clss = results[0].boxes.cls.cpu().numpy().astype(int)
+
+                    for box, track_id, conf, cls_id in zip(boxes, track_ids, confs, clss):
+                        class_name = model.names[cls_id]
+                        confidence_float = float(conf)
+                        
+                        if track_id not in tracked_objects or confidence_float > tracked_objects[track_id]['confidence']:
+                            tracked_objects[track_id] = {
+                                "class": class_name, "confidence": confidence_float, "box": box.tolist()
+                            }
+            frame_count += 1
+
+        final_predictions = sorted(list(tracked_objects.values()), key=lambda x: x['confidence'], reverse=True)
+
+        output_filename = f"{uuid.uuid4()}.mp4"
+        output_path = os.path.join(tempfile.gettempdir(), output_filename)
+        fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+        out = cv2.VideoWriter(output_path, fourcc, original_fps, (frame_width, frame_height))
+        
+        cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret: break
+            
+            for track_id, data in tracked_objects.items():
+                box = data['box']; label = f"ID {track_id}: {data['class']} ({data['confidence']:.2f})"
+                cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
+                cv2.putText(frame, label, (box[0], box[1] - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+            out.write(frame)
+
+        cap.release()
+        out.release()
+        
+        with open(output_path, "rb") as video_file:
+            processed_video_base64 = base64.b64encode(video_file.read()).decode('utf-8')
+        os.remove(output_path)
+
+        return JSONResponse(content={
+            "predictions": final_predictions,
+            "processed_media_base64": processed_video_base64,
+            "media_type": "video/mp4"
+        })
+    except Exception as e:
+        print("="*80); traceback.print_exc(); print("="*80)
+        return JSONResponse(content={"status": "error", "message": f"An internal error occurred: {str(e)}"}, status_code=500)
+    finally:
+        if os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+@app.websocket("/predict-stream")
+async def predict_stream(websocket: WebSocket):
+    await websocket.accept()
+    if not model:
+        await websocket.send_json({"status": "error", "message": "Model is not loaded"})
+        await websocket.close()
+        return
+    try:
+        while True:
+            data = await websocket.receive_text()
+            img_data = base64.b64decode(data.split(',')[1])
+            nparr = np.frombuffer(img_data, np.uint8)
+            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+            if img is not None:
+                results = model.predict(source=img, conf=0.4, save=False, verbose=False)
+                detections = process_results_to_json(results, model.names)
+                await websocket.send_json({"status": "ok", "detections": detections})
+    except WebSocketDisconnect:
+        print("Client disconnected from WebSocket.")
+    except Exception as e:
+        print(f"WebSocket Error: {e}")
+        await websocket.close()
 
 # ==============================================================================
 # 4. CHẠY SERVER
 # ==============================================================================
 if __name__ == "__main__":
-    # Chạy server với Uvicorn. host="0.0.0.0" để có thể truy cập từ bên ngoài container/máy ảo
     uvicorn.run(app, host="0.0.0.0", port=8000)
