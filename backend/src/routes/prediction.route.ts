@@ -14,22 +14,13 @@ const router = Router();
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 
-// 1. Route cho dự đoán ảnh (có lưu vào DB)
+// Route cho dự đoán (có lưu vào DB)
 router.post(
-  "/api/predictions/image",
+  "/api/predictions",
   // optionalAuthMiddleware,
-  // checkUsageLimit("image"),
+  // checkUsageLimit("image"), // TODO: check usage for video or image
   uploadSingle,
-  predictionController.predictImage
-);
-
-// 2. Route cho dự đoán video (có lưu vào DB)
-router.post(
-  "/api/predictions/video",
-  // optionalAuthMiddleware,
-  // checkUsageLimit("video"),
-  uploadSingle,
-  predictionController.predictVideo
+  predictionController.predict
 );
 
 
