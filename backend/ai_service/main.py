@@ -9,6 +9,7 @@ import os
 import uuid
 import base64
 import traceback
+import datetime
 from fastapi import WebSocket, WebSocketDisconnect
 
 # ==============================================================================
@@ -26,6 +27,11 @@ try:
 except Exception as e:
     print(f"Error loading YOLO model: {e}")
     model = None
+
+# Define the save directory relative to this script's location
+SAVE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'public', 'processed-images'))
+os.makedirs(SAVE_DIR, exist_ok=True)
+print(f"Annotated frames will be saved to: {SAVE_DIR}")
 
 # ==============================================================================
 # 2. HÀM HỖ TRỢ
@@ -164,7 +170,7 @@ async def predict_from_video_file(file: UploadFile = File(...)):
     finally:
         if os.path.exists(tmp_path):
             os.unlink(tmp_path)
-
+            
 @app.websocket("/predict-stream")
 async def predict_stream(websocket: WebSocket):
     await websocket.accept()
@@ -175,15 +181,56 @@ async def predict_stream(websocket: WebSocket):
     try:
         while True:
             data = await websocket.receive_text()
-            img_data = base64.b64decode(data.split(',')[1])
-            nparr = np.frombuffer(img_data, np.uint8)
-            img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-            if img is not None:
-                results = model.predict(source=img, conf=0.4, save=False, verbose=False)
-                detections = process_results_to_json(results, model.names)
-                await websocket.send_json({"status": "ok", "detections": detections})
+
+            try:
+                img_data = base64.b64decode(data.split(',')[1])
+                nparr = np.frombuffer(img_data, np.uint8)
+                img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+
+                if img is not None:
+                    results = model.predict(source=img, conf=0.4, save=False, verbose=False)
+                    detections = process_results_to_json(results, model.names)
+                    
+                    high_conf_detections = [d for d in detections if d['confidence'] > 0.8]
+
+                    if high_conf_detections:
+                        # Get the annotated image from the results
+                        annotated_frame = results[0].plot()
+
+                        # Create a unique filename
+                        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                        highest_conf_det = max(high_conf_detections, key=lambda x: x['confidence'])
+                        breed_name = highest_conf_det['class'].replace(' ', '_')
+                        filename = f"{timestamp}_{breed_name}.jpg"
+                        save_path = os.path.join(SAVE_DIR, filename)
+                        
+                        # Save the annotated image
+                        cv2.imwrite(save_path, annotated_frame)
+                        print(f"[WS] Saved annotated prediction frame to: {save_path}")
+
+                        # The saved file is in `backend/public/processed-images`
+                        # The URL path will be `/processed-images/filename.jpg`
+                        image_url = f"/processed-images/{filename}"
+
+                        # Send a special message to the client and close connection
+                        await websocket.send_json({
+                            "status": "captured",
+                            "imageUrl": image_url,
+                            "detections": high_conf_detections
+                        })
+                        print(f"[WS] Sent capture notification for {image_url}, closing connection.")
+                        await websocket.close()
+                        break  # Exit the while loop
+                    else:
+                        # If no high-confidence detection, send normal results
+                        await websocket.send_json({"status": "ok", "detections": detections})
+                else:
+                    print("[WS] ERROR: Received data could not be decoded into an image.")
+            except Exception as e:
+                print(f"[WS] ERROR processing received data frame: {e}")
+                continue
     except WebSocketDisconnect:
-        print("Client disconnected from WebSocket.")
+        print("[WS] Client disconnected.")
     except Exception as e:
         print(f"WebSocket Error: {e}")
         await websocket.close()
@@ -192,4 +239,4 @@ async def predict_stream(websocket: WebSocket):
 # 4. CHẠY SERVER
 # ==============================================================================
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="localhost", port=8000)

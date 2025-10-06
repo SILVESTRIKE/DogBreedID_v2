@@ -11,7 +11,6 @@ import { predictionRoutes } from "./routes/prediction.route";
 import { createProxyMiddleware } from "http-proxy-middleware";
 dotenv.config();
 const app = express();
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
@@ -28,14 +27,6 @@ app.use(
 app.get("/test", (req, res) => {
   res.render("test");
 });
-app.use(
-  "/predict/stream",
-  createProxyMiddleware({
-    target: AI_SERVICE_URL,
-    ws: true,
-    changeOrigin: true,
-  })
-);
 app.use( authRoutes);
 app.use( userRoutes);
 app.use(predictionRoutes);

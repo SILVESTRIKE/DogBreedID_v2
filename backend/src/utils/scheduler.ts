@@ -10,7 +10,7 @@ export const startSchedulers = () => {
     },
     {
       scheduled: true,
-      timezone: "Asia/Ho_Chi_Minh", // Đặt múi giờ phù hợp
+      timezone: "Asia/Ho_Chi_Minh", 
     }
   );
   console.log(

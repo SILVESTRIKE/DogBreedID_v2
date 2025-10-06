@@ -7,22 +7,26 @@ import { UpdateProfileSchema, IdParamsSchema } from "../types/zod/user.zod";
 
 const router = Router();
 
-// Tất cả các route bên dưới đều yêu cầu đăng nhập
-router.use(authMiddleware);
-
 // --- USER ROUTES (for logged-in user) ---
-router.get("/api/users/me", userController.getProfile);
+router.get("/api/users/me", authMiddleware, userController.getProfile);
 router.post(
   "/api/users/me",
+  authMiddleware,
   validate(UpdateProfileSchema),
   userController.updateProfile
 );
-router.delete("/api/users/me", userController.deleteCurrentUser);
+router.delete("/api/users/me", authMiddleware, userController.deleteCurrentUser);
 
 // --- ADMIN ROUTES ---
-router.get("/api/users", roleMiddleware("admin"), userController.getAllUsers);
+router.get(
+  "/api/users",
+  authMiddleware,
+  roleMiddleware("admin"),
+  userController.getAllUsers
+);
 router.delete(
   "/api/users/:id",
+  authMiddleware,
   roleMiddleware("admin"),
   validate(IdParamsSchema),
   userController.adminDeleteUser

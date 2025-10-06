@@ -1,13 +1,17 @@
-import { Router } from "express";
-import { createProxyMiddleware } from "http-proxy-middleware";
+import { Router, Request, Response } from "express";
+import { createProxyMiddleware, Options } from "http-proxy-middleware";
 import { optionalAuthMiddleware } from "../middlewares/optionalAuth.middleware";
 import { checkUsageLimit } from "../middlewares/usageLimiter.middleware";
 import { uploadSingle } from "../middlewares/upload.middleware";
 import { predictionController } from "../controllers/prediction.controller";
+import dotenv from "dotenv";
+import { ClientRequest, IncomingMessage, ServerResponse } from "http";
+import { Socket } from "net";
+
+dotenv.config();
 
 const router = Router();
 
-// Lấy URL của AI service từ biến môi trường, với giá trị mặc định
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL || "http://localhost:8000";
 
 // 1. Route cho dự đoán ảnh (có lưu vào DB)
@@ -31,16 +35,37 @@ router.post(
 
 // === ROUTE DỰ ĐOÁN REAL-TIME (KHÔNG LƯU LỊCH SỬ) ===
 
-// 3. Route WebSocket được chuyển tiếp thẳng đến AI Service.
-// Node.js chỉ đóng vai trò trung gian, không xử lý logic stream.
-// Do đó, không có logic cho việc này trong controller hay service.
+const proxyOptions: Options = {
+  target: AI_SERVICE_URL,
+  ws: true,
+  changeOrigin: true,
+    pathRewrite: (path, req) => {
+      console.log(`[HPM] pathRewrite original path: ${path}`);
+      const newPath = path.replace(/^.*/, '/predict-stream');
+      console.log(`[HPM] pathRewrite new path: ${newPath}`);
+      return newPath;
+    },
+    on: {
+      error: (err: Error, req: IncomingMessage, res: ServerResponse | Socket) => {
+        console.error('[HPM] Proxy Error:', err);
+        if (res instanceof ServerResponse) {
+          if (!res.headersSent) {
+            res.writeHead(502, { 'Content-Type': 'text/plain' });
+          }
+          res.end('Proxy Error');
+        } else if (res instanceof Socket) {
+          res.destroy(err);
+        }
+      },
+      proxyReqWs: (proxyReq: ClientRequest, req: IncomingMessage, socket: Socket, options: Options, head: Buffer) => {
+        console.log(`[HPM] Proxying WebSocket request to: ${options.target?.toString()}`);
+      },
+    }
+};
+
 router.use(
-  "/predict/stream",
-  createProxyMiddleware({ 
-    target: AI_SERVICE_URL, 
-    ws: true,
-    changeOrigin: true
-  })
+  "/api/predict/stream",
+  createProxyMiddleware(proxyOptions)
 );
 
 export { router as predictionRoutes };

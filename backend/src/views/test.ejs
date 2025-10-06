@@ -240,10 +240,15 @@
     const videoEl = document.getElementById("realtimeVideo");
     const canvasEl = document.getElementById("realtimeCanvas");
     const realtimeResultEl = document.getElementById("realtimeResult");
+    const realtimeContainer = document.getElementById("realtimeContainer");
     const ctx = canvasEl.getContext("2d");
     let realtimeSocket, frameInterval, videoStream;
 
     const startRealtimePrediction = async () => {
+      // Clear any previous captured image
+      const capturedImg = document.getElementById('capturedImage');
+      if (capturedImg) capturedImg.remove();
+
       try {
         videoStream = await navigator.mediaDevices.getUserMedia({ video: true });
         videoEl.srcObject = videoStream;
@@ -257,20 +262,48 @@
         return;
       }
       
-      const WS_URL = `ws://${window.location.host}/predict/stream`;
+      const WS_URL = `ws://${window.location.host}/api/predict/stream`;
       realtimeSocket = new WebSocket(WS_URL);
       
       realtimeSocket.onopen = () => {
-        realtimeResultEl.textContent = "Status: Connected. Starting prediction...";
-        frameInterval = setInterval(() => sendFrame(), 100); // 10 fps
+        realtimeResultEl.textContent = "Status: Connected. Searching for a high-confidence prediction...";
+        const FPS = 10;
+        frameInterval = setInterval(() => sendFrame(), 1000 / FPS);
       };
       
       realtimeSocket.onmessage = (event) => {
         const data = JSON.parse(event.data);
-        if (data.status === "ok") drawBoxes(data.detections);
+
+        if (data.status === "captured") {
+          console.log("Capture successful!", data);
+          realtimeResultEl.textContent = `Capture successful! Details: ${JSON.stringify(data.detections, null, 2)}`;
+
+          // Create and display the captured image
+          const img = document.createElement('img');
+          img.id = 'capturedImage';
+          img.src = data.imageUrl;
+          img.style.maxWidth = '100%';
+          img.style.marginTop = '10px';
+          realtimeContainer.after(img);
+
+          // The server will close the connection, which will trigger the onclose event for cleanup.
+
+        } else if (data.status === "ok") {
+          drawBoxes(data.detections);
+        }
       };
 
-      realtimeSocket.onclose = () => stopRealtimePrediction();
+      realtimeSocket.onclose = () => {
+        console.log("WebSocket connection closed.");
+        // This event handles all cleanup, whether initiated by client or server.
+        if (frameInterval) clearInterval(frameInterval);
+        if (videoStream) videoStream.getTracks().forEach((track) => track.stop());
+        ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+        realtimeResultEl.textContent = "Status: Idle / Captured";
+        startBtn.disabled = false;
+        stopBtn.disabled = true;
+      };
+
       realtimeSocket.onerror = (err) => {
         realtimeResultEl.textContent = "Status: WebSocket Error.";
         console.error("WebSocket Error:", err);
@@ -281,13 +314,10 @@
     };
 
     const stopRealtimePrediction = () => {
-      if (frameInterval) clearInterval(frameInterval);
-      if (realtimeSocket) realtimeSocket.close();
-      if (videoStream) videoStream.getTracks().forEach((track) => track.stop());
-      ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
-      realtimeResultEl.textContent = "Status: Idle";
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
+      // This function is now only for *initiating* the closure from the client side (e.g., stop button).
+      if (realtimeSocket && realtimeSocket.readyState < 2) { // If OPEN or CONNECTING
+        realtimeSocket.close();
+      }
     };
 
     const sendFrame = () => {
