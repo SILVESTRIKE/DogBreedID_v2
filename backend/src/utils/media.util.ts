@@ -10,6 +10,15 @@ const transformPaths = (data: any, baseUrl: string): any => {
         delete obj.mediaPath;
     }
 
+    if (obj.imagePath) {
+        delete obj.imagePath;
+    }
+
+    if (obj.processedMediaPath) {
+        obj.processedMediaURL = `${baseUrl}${obj.processedMediaPath}`;
+        delete obj.processedMediaPath;
+    }
+
     for (const key in obj) {
         if (Object.prototype.hasOwnProperty.call(obj, key)) {
             obj[key] = transformPaths(obj[key], baseUrl);

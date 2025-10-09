@@ -65,11 +65,15 @@ const storage = multer.diskStorage({
 
 const allowedMimeTypes = [
   "image/jpeg",
+  "image/jpg",
   "image/png",
   "image/gif",
   "image/webp",
   "video/mp4",
+  "video/avi",
   "video/webm",
+  "video/mov",
+  "video/mkv",
   "application/pdf",
 ];
 
@@ -79,6 +83,12 @@ const fileFilter = (
   cb: multer.FileFilterCallback
 ) => {
   if (allowedMimeTypes.includes(file.mimetype)) {
+    // Attach mediaType to the request object for controllers to use
+    if (file.mimetype.startsWith("image/")) {
+      (req as any).mediaType = "image";
+    } else if (file.mimetype.startsWith("video/")) {
+      (req as any).mediaType = "video";
+    }
     cb(null, true);
   } else {
     cb(new Error("Định dạng file không được hỗ trợ!"));

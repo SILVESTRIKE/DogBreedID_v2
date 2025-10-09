@@ -58,7 +58,7 @@ export const predictionService = {
     const formData = new FormData();
     formData.append("file", fs.createReadStream(mediaPath), { filename: originalFilename });
 
-    const endpoint = type === "image" ? "/predict" : "/predict-video";
+    const endpoint = type === "image" ? "/predict/image" : "/predict/video";
     const response = await axios.post(`${AI_SERVICE_URL}${endpoint}`, formData, {
       headers: { ...formData.getHeaders() },
       timeout: type === 'video' ? 300000 : 60000,
@@ -98,7 +98,7 @@ export const predictionService = {
 
     // Lưu kết quả vào cơ sở dữ liệu
     const newPrediction = await PredictionHistoryModel.create({
-      user: user._id, media: newMedia._id, imagePath: mediaPath,
+      user: user._id, media: newMedia._id, mediaPath: mediaPath,
       predictedClass: predictionResult.predictions[0]?.class || "N/A",
       confidence: predictionResult.predictions[0]?.confidence || 0,
       predictions: predictionResult.predictions,
@@ -117,7 +117,7 @@ export const predictionService = {
     // Populate các trường user và media để trả về thông tin đầy đủ
     return newPrediction.populate([
       { path: "user", select: "username email role" }, // Chỉ lấy các trường cần thiết của user
-      { path: "media" },
+      { path: "media", select: "mediaPath type" }  // Chỉ lấy các trường cần thiết của media,
     ]);
   },
 };

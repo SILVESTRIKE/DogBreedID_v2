@@ -174,41 +174,7 @@ export class MediaController {
       .json({ data: transformedData, pagination: result.pagination });
   }
   
-  static async streamMedia (req: Request, res: Response, next: NextFunction) {
-    // Lấy đường dẫn file từ URL, ví dụ: /processed-videos/abc.mp4
-    const relativePath = req.path;
-    const filePath = path.join(__dirname, "../../public", relativePath);
-
-    if (!fs.existsSync(filePath)) {
-      return next(new NotFoundError("Không tìm thấy file."));
-    }
-
-    const stat = fs.statSync(filePath);
-    const fileSize = stat.size;
-    const range = req.headers.range;
-
-    if (range) {
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunksize = end - start + 1;
-
-      const file = fs.createReadStream(filePath, { start, end });
-      const head = {
-        "Content-Range": `bytes ${start}-${end}/${fileSize}`,
-        "Accept-Ranges": "bytes",
-        "Content-Length": chunksize,
-        "Content-Type": "video/mp4", // Hoặc một loại media khác
-      };
-
-      res.writeHead(206, head); // 206 Partial Content
-      file.pipe(res);
-    } else {
-      const head = { "Content-Length": fileSize, "Content-Type": "video/mp4" };
-      res.writeHead(200, head); // 200 OK
-      fs.createReadStream(filePath).pipe(res);
-    }
-  }
+  
 }
 export class DirectoryController {
   static async create(req: Request, res: Response) {

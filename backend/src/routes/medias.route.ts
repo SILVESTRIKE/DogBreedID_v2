@@ -12,7 +12,7 @@ import {
 } from "../types/zod/medias.zod";
 import { uploadSingle, uploadMultiple } from "../middlewares/upload.middleware";
 // import { authMiddleware } from "../middlewares/auth.middleware";
-import { roleMiddleware } from "../middlewares/role.middleware";
+import { checkRole } from "../middlewares/role.middleware";
 
 const router = Router();
 
@@ -64,7 +64,6 @@ router.get(
   validateData(GetByIdParamsSchema, "params"),
   MediaController.getMediaById
 );
-router.get("/api/medias/stream/:folder(processed-videos|processed-images)/:filename", MediaController.streamMedia);
 
 // 2.3. Cập nhật thông tin (name, description) của một media.
 router.post(
@@ -119,7 +118,7 @@ router.get(
 );
 
 // 3.5. Xóa mềm một thư mục và toàn bộ nội dung bên trong nó (đệ quy).
-router.delete(
+router.post(
   "/api/directories/:id",
   // checkAllowedRolesMiddleware(['HR_ADMIN']),
   validateData(GetByIdParamsSchema, "params"),

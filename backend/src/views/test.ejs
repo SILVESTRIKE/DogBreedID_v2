@@ -47,28 +47,18 @@
       </div>
     </div>
 
-    <!-- ==================== FILE UPLOAD SECTIONS ==================== -->
+    <!-- ==================== FILE UPLOAD SECTION (MERGED) ==================== -->
     <h2>File Prediction</h2>
-    <div style="display: flex; gap: 20px;">
+    <div>
         <div style="flex: 1;">
-            <h3>Image Upload</h3>
+            <h3>Media Upload (Image or Video)</h3>
             <form id="predictionForm">
-              <div class="form-group"><label for="predictionFile">Image File</label><input type="file" id="predictionFile" name="file" accept="image/*" required /></div>
+              <div class="form-group"><label for="predictionFile">Media File</label><input type="file" id="predictionFile" name="file" accept="image/*,video/*" required /></div>
               <div class="form-group"><label for="predictionToken">Auth Token (auto-filled on login)</label><input type="text" id="predictionToken" name="token" readonly /></div>
-              <button type="submit">Upload and Predict Image</button>
+              <button type="submit">Upload and Predict</button>
             </form>
-            <div id="imageResultContainer" style="margin-top: 15px;"></div>
+            <div id="mediaResultContainer" style="margin-top: 15px;"></div>
             <pre id="predictionResult"></pre>
-        </div>
-        <div style="flex: 1;">
-            <h3>Video Upload</h3>
-            <form id="videoForm">
-              <div class="form-group"><label for="videoFile">Video File</label><input type="file" id="videoFile" name="file" accept="video/*" required /></div>
-              <div class="form-group"><label for="videoToken">Auth Token (auto-filled on login)</label><input type="text" id="videoToken" name="token" readonly /></div>
-              <button type="submit">Upload and Predict Video</button>
-            </form>
-            <div id="videoResultContainer" style="margin-top: 15px;"></div>
-            <pre id="videoResult"></pre>
         </div>
     </div>
 
@@ -84,10 +74,7 @@
     </div>
     <pre id="realtimeResult">Status: Idle</pre>
 
-    <!-- ==================== AUTOMATED TEST SECTION ==================== -->
-    <h2>Automated End-to-End Test</h2>
-    <button id="startFullTestBtn">Start Full Test</button>
-    <pre id="fullTestResult">Test status: Idle</pre>
+
   </div>
 
   <script>
@@ -97,30 +84,38 @@
     const api = (() => {
       let accessToken = null;
       let refreshToken = null;
+      let trialToken = null;
 
       const setTokens = (newTokens) => {
         accessToken = newTokens.accessToken;
         refreshToken = newTokens.refreshToken;
         document.getElementById("predictionToken").value = accessToken;
-        document.getElementById("videoToken").value = accessToken;
+      };
+
+      const setTrialToken = (token) => {
+        trialToken = token;
+        // Có thể hiển thị trạng thái trial ở đâu đó trên UI nếu muốn
+        console.log("Trial mode activated.");
       };
 
       const clearTokens = () => {
         accessToken = null;
         refreshToken = null;
+        trialToken = null;
         document.getElementById("predictionToken").value = "";
-        document.getElementById("videoToken").value = "";
       };
 
       const fetchWithAuth = async (url, options = {}) => {
         if (!options.headers) options.headers = {};
-        if (accessToken && !options.headers["Authorization"]) {
+        
+        // Ưu tiên Access Token nếu có
+        if (accessToken) {
           options.headers["Authorization"] = `Bearer ${accessToken}`;
         }
         
         let response = await fetch(url, options);
 
-        if (response.status === 401 && refreshToken) {
+        if (response.status === 401 && refreshToken && !url.includes('/api/auth/refresh-token')) {
           try {
             console.log("Access token expired. Refreshing...");
             const refreshResponse = await fetch("/api/auth/refresh-token", {
@@ -208,16 +203,29 @@
 
           resultEl.textContent = JSON.stringify(result, null, 2);
 
-          const mediaPath = result.data?.processedMediaPath;
-          if (mediaPath && containerEl) {
-            const isVideo = mediaPath.endsWith('.mp4');
+          // Display original media
+          const originalURL = result.data?.media?.mediaURL;
+          if (originalURL && containerEl) {
+            containerEl.innerHTML += '<h3>Original Media:</h3>';
+            const isVideo = result.data.media.type === 'video';
             const mediaElement = document.createElement(isVideo ? 'video' : 'img');
-            mediaElement.src = mediaPath;
+            mediaElement.src = originalURL;
             mediaElement.style.maxWidth = '100%';
-            mediaElement.style.marginTop = '15px';
-            if (isVideo) {
-              mediaElement.controls = true;
-            }
+            mediaElement.style.marginTop = '10px';
+            if (isVideo) mediaElement.controls = true;
+            containerEl.appendChild(mediaElement);
+          }
+
+          // Display processed media
+          const processedURL = result.data?.processedMediaURL;
+          if (processedURL && containerEl) {
+            containerEl.innerHTML += '<h3>Processed Media (with predictions):</h3>';
+            const isVideo = processedURL.includes('.mp4');
+            const mediaElement = document.createElement(isVideo ? 'video' : 'img');
+            mediaElement.src = processedURL;
+            mediaElement.style.maxWidth = '100%';
+            mediaElement.style.marginTop = '10px';
+            if (isVideo) mediaElement.controls = true;
             containerEl.appendChild(mediaElement);
           }
         } catch (error) {
@@ -229,8 +237,7 @@
     // Initialize all forms
     setupAuthForm("registerForm", "registerResult", "/api/auth/register");
     setupAuthForm("loginForm", "loginResult", "/api/auth/login");
-    setupMultipartForm("predictionForm", "predictionResult", "imageResultContainer", "/api/predictions/image");
-    setupMultipartForm("videoForm", "videoResult", "videoResultContainer", "/api/predictions/video");
+    setupMultipartForm("predictionForm", "predictionResult", "mediaResultContainer", "/api/predictions");
 
     // =======================================================================
     // REAL-TIME PREDICTION (WEBSOCKET)
@@ -345,55 +352,6 @@
     startBtn.addEventListener("click", startRealtimePrediction);
     stopBtn.addEventListener("click", stopRealtimePrediction);
 
-    // =======================================================================
-    // AUTOMATED E2E TEST SCRIPT
-    // =======================================================================
-    const startFullTestBtn = document.getElementById("startFullTestBtn");
-    const fullTestResultEl = document.getElementById("fullTestResult");
-
-    const runFullTest = async () => {
-      startFullTestBtn.disabled = true;
-      fullTestResultEl.textContent = "";
-      const log = (message) => { fullTestResultEl.textContent += message + "\n"; };
-      const logStep = (message) => log(`\n[BƯỚC] ${message}`);
-      const logSuccess = (message) => log(`  ✓ ${message}`);
-      const logError = (message) => log(`  ✗ ${message}`);
-
-      try {
-        const BASE_URL = "/api";
-        const ADMIN_CREDENTIALS = { email: "admin@example.com", password: "adminpassword" };
-        const NEW_USER_CREDENTIALS = { username: `testuser_${Date.now()}`, email: `testuser_${Date.now()}@example.com`, password: "password123" };
-        
-        const apiCall = async (endpoint, method = "GET", body = null, token = null) => {
-          const headers = { "Content-Type": "application/json" };
-          if (token) headers["Authorization"] = `Bearer ${token}`;
-          const response = await fetch(endpoint, { method, headers, body: body ? JSON.stringify(body) : null });
-          const result = await response.json();
-          if (!response.ok) throw result;
-          return result;
-        };
-
-        logStep("Đăng nhập Admin...");
-        const adminLoginRes = await apiCall(`${BASE_URL}/auth/login`, "POST", ADMIN_CREDENTIALS);
-        logSuccess("Đăng nhập Admin thành công.");
-
-        logStep("Đăng ký người dùng mới...");
-        await apiCall(`${BASE_URL}/auth/register`, "POST", NEW_USER_CREDENTIALS);
-        logSuccess(`Đăng ký ${NEW_USER_CREDENTIALS.email} thành công.`);
-
-        // Note: Cần có endpoint để dọn dẹp (xóa user) để test này hoàn chỉnh
-        logStep("Dọn dẹp (bỏ qua)...");
-
-        log("\n====================================");
-        log("    TẤT CẢ CÁC BƯỚC ĐÃ THÀNH CÔNG!    ");
-        log("====================================");
-      } catch (error) {
-        logError(`Test thất bại: ${JSON.stringify(error)}`);
-      } finally {
-        startFullTestBtn.disabled = false;
-      }
-    };
-    startFullTestBtn.addEventListener("click", runFullTest);
   </script>
 </body>
 </html>

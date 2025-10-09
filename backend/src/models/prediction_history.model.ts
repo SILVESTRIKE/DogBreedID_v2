@@ -8,6 +8,7 @@ interface Speed {
   total: number;
 }
 interface IYoloPrediction {
+  track_id?: number;
   box: number[]; // [x1, y1, x2, y2]
   class: string;
   confidence: number;
@@ -16,7 +17,7 @@ interface IYoloPrediction {
 export type PredictionHistoryDoc = Document & {
   user: Types.ObjectId;
   media: MediaDoc["_id"];
-  imagePath: string;
+  mediaPath: string;
   modelUsed: string;
   predictedClass: string;
   confidence: number;
@@ -32,13 +33,12 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
   {
     user: { type: Schema.Types.ObjectId, ref: "User", required: true, index: true },
     media: { type: Schema.Types.ObjectId, ref: "Media", required: true, index: true },
-    imagePath: { type: String, required: true },
+    mediaPath: { type: String, required: true },
     modelUsed: { type: String, required: true },
-    predictedClass: { type: String, required: true },
-    confidence: { type: Number, required: true },
     predictions: [
       {
         _id: false,
+        track_id: { type: Number, required: false },
         box: { type: [Number], required: true },
         class: { type: String, required: true },
         confidence: { type: Number, required: true },
@@ -53,9 +53,9 @@ const predictionHistorySchema = new Schema<PredictionHistoryDoc>(
     collection: "prediction_histories",
     toJSON: {
       transform: (doc: any, ret: any) => {
-        ret.id = ret._id;
         delete ret._id;
         delete ret.__v;
+        delete ret.isDeleted;
       },
     },
   }

@@ -47,9 +47,10 @@ const mediaSchema = new mongoose.Schema<MediaDoc>(
       virtuals: true,
       transform(doc: any, ret: any) {
         ret.id = ret._id;
+        delete ret.id;
         delete ret._id;
         delete ret.__v;
-        // Giữ lại mediaPath để transform ở controller nhưng không trả về
+        delete ret.isDeleted;
       },
     },
     toObject: {
