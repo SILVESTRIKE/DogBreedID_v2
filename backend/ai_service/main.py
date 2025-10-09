@@ -9,33 +9,51 @@ import os
 import uuid
 import base64
 import traceback
-import datetime
+import asyncio
 from typing import List, Dict, Any
+from ultralytics.utils.plotting import Annotator, colors
 
 # ==============================================================================
-# 1. KHỞI TẠO APP VÀ LOAD MODEL
+# 1. CONFIGURATION
+# ==============================================================================
+MODEL_PATH = "best_model.pt"
+DEVICE = "cuda"
+IMAGE_CONF_THRESHOLD = 0.25
+VIDEO_CONF_THRESHOLD = 0.5
+STREAM_CONF_THRESHOLD = 0.4
+STREAM_HIGH_CONF_THRESHOLD = 0.8
+TRACKER_CONFIG = "bytetrack.yaml"
+
+# Define the save directory relative to this script's location
+SAVE_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "public", "processed-images")
+)
+
+
+# ==============================================================================
+# 2. INITIALIZATION
 # ==============================================================================
 app = FastAPI(
     title="Dog Breed Inference API",
     description="An API to predict dog breeds from images and videos using a YOLOv8 model.",
-    version="6.0.0" # Updated version
+    version="6.0.0",
 )
 
 try:
-    model = YOLO("best_model.pt")
+    model = YOLO(MODEL_PATH)
+    model.to(DEVICE)
     print("YOLO model loaded successfully.")
 except Exception as e:
     print(f"Error loading YOLO model: {e}")
     model = None
 
-# Define the save directory relative to this script's location
-SAVE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'public', 'processed-images'))
 os.makedirs(SAVE_DIR, exist_ok=True)
 print(f"Annotated frames will be saved to: {SAVE_DIR}")
 
 # ==============================================================================
-# 2. HÀM HỖ TRỢ (REFACTORED)
+# 3. HELPER FUNCTIONS
 # ==============================================================================
+
 
 def process_results(results) -> List[Dict[str, Any]]:
     """
@@ -47,158 +65,222 @@ def process_results(results) -> List[Dict[str, Any]]:
         return detections
 
     boxes = results[0].boxes
-    track_ids = boxes.id.int().cpu().tolist() if boxes.id is not None else [None] * len(boxes)
+    track_ids = (
+        boxes.id.int().cpu().tolist() if boxes.id is not None else [None] * len(boxes)
+    )
     class_ids = boxes.cls.int().cpu().tolist()
     confs = boxes.conf.float().cpu().tolist()
     xyxy_coords = boxes.xyxy.cpu().tolist()
-    
+
     for track_id, class_id, conf, xyxy in zip(track_ids, class_ids, confs, xyxy_coords):
-        detections.append({
-            "track_id": track_id,
-            "class": model.names[class_id],
-            "confidence": conf,
-            "box": [round(coord) for coord in xyxy],
-        })
+        detections.append(
+            {
+                "track_id": track_id,
+                "class_id": class_id,
+                "class": model.names[class_id],
+                "confidence": conf,
+                "box": [round(coord) for coord in xyxy],
+            }
+        )
     return detections
+
 
 def draw_custom_annotations(frame, detections: List[Dict[str, Any]]):
     """
-    Draws custom bounding boxes and labels on a frame.
-    Label includes track_id if present.
+    Draws bounding boxes and labels on a frame using Ultralytics' Annotator
+    to achieve the default look and feel, but with the track_id included.
     """
     annotated_frame = frame.copy()
+    annotator = Annotator(annotated_frame, line_width=2, example=str(model.names))
+
     for det in detections:
-        box = det['box']
-        confidence = det['confidence']
-        class_name = det['class']
-        track_id = det.get('track_id')
+        box = det["box"]
+        confidence = det["confidence"]
+        class_name = det["class"]
+        class_id = det["class_id"]
+        track_id = det.get("track_id")
 
-        label = f"{class_name} ({confidence:.2f})"
+        # Xây dựng nhãn bao gồm cả track_id
+        label = f"{class_name} {confidence:.2f}"
         if track_id is not None:
-            label = f"ID {track_id}: {label}"
+            label = f"ID:{track_id} {label}"
 
-        # Draw bounding box
-        cv2.rectangle(annotated_frame, (box[0], box[1]), (box[2], box[3]), (0, 255, 0), 2)
-        
-        # Draw label background
-        (w, h), _ = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.7, 2)
-        (x1, y1, x2, y2) = box
-        cv2.rectangle(annotated_frame, (x1, y1 - h - 10), (x1 + w, y1 - 10), (0, 255, 0), -1)
-        
-        # Draw label text
-        cv2.putText(annotated_frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 0), 2)
-        
-    return annotated_frame
+        # Sử dụng annotator của ultralytics để vẽ
+        # annotator.box_label sẽ tự động xử lý màu sắc, vị trí văn bản, v.v.
+        annotator.box_label(box, label, color=colors(class_id, True))
+
+    return annotator.result()
+
 
 # ==============================================================================
-# 3. API ENDPOINTS (IMPROVED, SEPARATE ROUTES)
+# 4. API ENDPOINTS
 # ==============================================================================
+
 
 @app.get("/", summary="Health Check")
 def health_check():
     """Provides a simple health check endpoint."""
-    return JSONResponse(content={"status": "ok", "message": "YOLOv8 Inference Service is running."})
+    return JSONResponse(
+        content={"status": "ok", "message": "YOLOv8 Inference Service is running."}
+    )
+
 
 @app.post("/predict/image", summary="Predict from a single image")
 async def predict_from_image_file(file: UploadFile = File(...)):
     """
-    Accepts an image file, returns predictions and a base64 annotated image.
+    Accepts an image file, returns predictions (with track_id) and a base64 annotated image.
     """
     if not model:
-        return JSONResponse(content={"status": "error", "message": "Model is not loaded"}, status_code=503)
+        return JSONResponse(
+            content={"status": "error", "message": "Model is not loaded"},
+            status_code=503,
+        )
     try:
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
         img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
         if img is None:
-            return JSONResponse(content={"status": "error", "message": "Could not decode image."}, status_code=400)
-        
-        results = model.predict(source=img, conf=0.25, verbose=False)
-        detections = process_results(results) # Use new helper
-        
-        annotated_image = draw_custom_annotations(img, detections) # Use new helper
-        _, buffer = cv2.imencode('.jpg', annotated_image)
-        processed_image_base64 = base64.b64encode(buffer).decode('utf-8')
+            return JSONResponse(
+                content={"status": "error", "message": "Could not decode image."},
+                status_code=400,
+            )
 
-        return JSONResponse(content={
-            "predictions": sorted(detections, key=lambda x: x['confidence'], reverse=True),
-            "processed_media_base64": processed_image_base64,
-            "media_type": "image/jpeg"
-        })
+        # Use model.track() to get track_id even for a single image
+        results = model.track(
+            source=img, conf=IMAGE_CONF_THRESHOLD, persist=False, verbose=False
+        )
+        detections = process_results(results)
+
+        annotated_image = draw_custom_annotations(img, detections)
+        _, buffer = cv2.imencode(".jpg", annotated_image)
+        processed_image_base64 = base64.b64encode(buffer).decode("utf-8")
+
+        return JSONResponse(
+            content={
+                "predictions": sorted(
+                    detections, key=lambda x: x["confidence"], reverse=True
+                ),
+                "processed_media_base64": processed_image_base64,
+                "media_type": "image/jpeg",
+            }
+        )
     except Exception as e:
         traceback.print_exc()
-        return JSONResponse(content={"status": "error", "message": f"An internal error occurred: {str(e)}"}, status_code=500)
+        return JSONResponse(
+            content={
+                "status": "error",
+                "message": f"An internal error occurred: {str(e)}",
+            },
+            status_code=500,
+        )
 
-@app.post("/predict/video", summary="Process video and return best shot for each track")
+
+@app.post(
+    "/predict/video",
+    summary="Process a video, return annotated video and best shot JSON",
+)
 async def predict_from_video_file(file: UploadFile = File(...)):
     """
-    Tracks each dog in a video, finds the best frame for each, saves it as an image,
-    and returns a list of predictions with URLs to the saved images.
+    Processes a video to return a fully annotated version and a JSON object
+    containing the best detection for each tracked object.
     """
     if not model:
-        return JSONResponse(content={"status": "error", "message": "Model is not loaded"}, status_code=503)
+        return JSONResponse(
+            content={"status": "error", "message": "Model is not loaded"},
+            status_code=503,
+        )
 
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".mp4") as tmp:
-        contents = await file.read()
-        tmp.write(contents)
-        tmp_path = tmp.name
-
+    tmp_in_path = ""
+    tmp_out_path = ""
     try:
-        cap = cv2.VideoCapture(tmp_path)
+        with tempfile.NamedTemporaryFile(
+            delete=False, suffix=".mp4"
+        ) as tmp_in, tempfile.NamedTemporaryFile(
+            delete=False, suffix=".mp4"
+        ) as tmp_out:
+            contents = await file.read()
+            tmp_in.write(contents)
+            tmp_in_path = tmp_in.name
+            tmp_out_path = tmp_out.name
+
+        cap = cv2.VideoCapture(tmp_in_path)
         if not cap.isOpened():
-            return JSONResponse(content={"status": "error", "message": "Could not open video file."}, status_code=400)
+            return JSONResponse(
+                content={"status": "error", "message": "Could not open video file."},
+                status_code=400,
+            )
 
-        tracked_objects = {} # Stores the best prediction for each track_id
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
 
-        while cap.isOpened():
-            ret, frame = cap.read()
-            if not ret:
-                break
-            
-            results = model.track(source=frame, conf=0.5, persist=True, verbose=False, tracker="bytetrack.yaml")
-            
-            if results[0].boxes.id is not None:
-                detections = process_results(results)
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        video_writer = cv2.VideoWriter(tmp_out_path, fourcc, fps, (width, height))
+
+        tracked_objects = {}
+
+        results_generator = model.track(
+            source=tmp_in_path,
+            conf=VIDEO_CONF_THRESHOLD,
+            persist=True,
+            verbose=False,
+            tracker=TRACKER_CONFIG,
+            stream=True,
+        )
+
+        for results in results_generator:
+            frame = results.orig_img
+            detections = process_results(results)
+
+            if results.boxes.id is not None:
                 for det in detections:
-                    track_id = det['track_id']
-                    if track_id is None: continue
-                    
-                    confidence = det['confidence']
-                    
-                    # If new track_id or higher confidence, store its data and frame
-                    if track_id not in tracked_objects or confidence > tracked_objects[track_id]['confidence']:
+                    track_id = det["track_id"]
+                    if track_id is None:
+                        continue
+
+                    confidence = det["confidence"]
+                    if (
+                        track_id not in tracked_objects
+                        or confidence > tracked_objects[track_id]["confidence"]
+                    ):
                         tracked_objects[track_id] = det
-                        tracked_objects[track_id]['frame'] = frame.copy()
+
+            annotated_frame = draw_custom_annotations(frame, detections)
+            video_writer.write(annotated_frame)
+
         cap.release()
-        os.unlink(tmp_path)
+        video_writer.release()
 
-        # Process the best shots
-        final_predictions = []
-        for track_id, data in tracked_objects.items():
-            best_frame = data.pop('frame')
-            breed_name = data['class'].replace(' ', '_')
-            
-            # Save the best frame as an image
-            filename = f"capture_{track_id}_{breed_name}_{uuid.uuid4().hex[:6]}.jpg"
-            save_path = os.path.join(SAVE_DIR, filename)
-            
-            # Draw annotation only for this specific object on its best frame
-            annotated_frame = draw_custom_annotations(best_frame, [data])
-            cv2.imwrite(save_path, annotated_frame)
-            
-            data['image_url'] = f"/processed-images/{filename}"
-            final_predictions.append(data)
+        final_predictions = list(tracked_objects.values())
 
-        return JSONResponse(content={
-            "predictions": sorted(final_predictions, key=lambda x: x['track_id']),
-            "media_type": "video/best_shots"
-        })
+        with open(tmp_out_path, "rb") as video_file:
+            processed_video_base64 = base64.b64encode(video_file.read()).decode("utf-8")
+
+        return JSONResponse(
+            content={
+                "predictions": sorted(
+                    final_predictions, key=lambda x: x.get("track_id", 0)
+                ),
+                "processed_media_base64": processed_video_base64,
+                "media_type": "video/mp4",
+            }
+        )
+
     except Exception as e:
         traceback.print_exc()
-        return JSONResponse(content={"status": "error", "message": f"An internal error occurred: {str(e)}"}, status_code=500)
+        return JSONResponse(
+            content={
+                "status": "error",
+                "message": f"An internal error occurred: {str(e)}",
+            },
+            status_code=500,
+        )
     finally:
-        if os.path.exists(tmp_path):
-            os.unlink(tmp_path)
+        if os.path.exists(tmp_in_path):
+            os.unlink(tmp_in_path)
+        if os.path.exists(tmp_out_path):
+            os.unlink(tmp_out_path)
+
 
 @app.websocket("/predict-stream")
 async def predict_stream(websocket: WebSocket):
@@ -210,42 +292,55 @@ async def predict_stream(websocket: WebSocket):
         await websocket.send_json({"status": "error", "message": "Model is not loaded"})
         await websocket.close()
         return
-    
+
     try:
         while True:
             data = await websocket.receive_text()
-            img_data = base64.b64decode(data.split(',')[1])
+            img_data = base64.b64decode(data.split(",")[1])
             nparr = np.frombuffer(img_data, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
             if img is not None:
-                results = model.track(source=img, conf=0.4, persist=True, verbose=False)
+                results = model.track(
+                    source=img, conf=STREAM_CONF_THRESHOLD, persist=True, verbose=False
+                )
                 detections = process_results(results)
-                
-                high_conf_detections = [d for d in detections if d['confidence'] > 0.8]
+
+                high_conf_detections = [
+                    d
+                    for d in detections
+                    if d["confidence"] > STREAM_HIGH_CONF_THRESHOLD
+                ]
 
                 if high_conf_detections:
-                    best_det = max(high_conf_detections, key=lambda x: x['confidence'])
-                    track_id = best_det.get('track_id', 'N/A')
-                    breed_name = best_det['class'].replace(' ', '_')
+                    best_det = max(high_conf_detections, key=lambda x: x["confidence"])
+                    track_id = best_det.get("track_id", "N/A")
+                    breed_name = best_det["class"].replace(" ", "_")
 
-                    filename = f"capture_ws_{track_id}_{breed_name}_{uuid.uuid4().hex[:6]}.jpg"
+                    filename = (
+                        f"capture_ws_{track_id}_{breed_name}_{uuid.uuid4().hex[:6]}.jpg"
+                    )
                     save_path = os.path.join(SAVE_DIR, filename)
                     annotated_frame = draw_custom_annotations(img, high_conf_detections)
                     cv2.imwrite(save_path, annotated_frame)
-                    
+
                     image_url = f"/processed-images/{filename}"
                     print(f"[WS] Captured high-confidence frame: {save_path}")
 
-                    await websocket.send_json({
-                        "status": "captured",
-                        "imageUrl": image_url,
-                        "detections": high_conf_detections
-                    })
+                    await websocket.send_json(
+                        {
+                            "status": "captured",
+                            "imageUrl": image_url,
+                            "detections": high_conf_detections,
+                        }
+                    )
+                    await asyncio.sleep(0.1)
                     await websocket.close()
                     break
                 else:
-                    await websocket.send_json({"status": "ok", "detections": detections})
+                    await websocket.send_json(
+                        {"status": "ok", "detections": detections}
+                    )
             else:
                 print("[WS] ERROR: Received data could not be decoded into an image.")
 
@@ -257,10 +352,12 @@ async def predict_stream(websocket: WebSocket):
         try:
             await websocket.close()
         except RuntimeError:
-            pass # Ignore, socket already closed
+            pass
+
 
 # ==============================================================================
-# 4. CHẠY SERVER
+# 5. SERVER RUN
 # ==============================================================================
+
 if __name__ == "__main__":
     uvicorn.run(app, host="localhost", port=8000)

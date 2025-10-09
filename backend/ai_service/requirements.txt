@@ -6,6 +6,7 @@ uvicorn[standard]
 ultralytics
 opencv-python-headless
 pillow
-
-
-#uvicorn main:app --host 0.0.0.0 --port 8000 //command to run the server
+python-multipart
+torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+pydantic_settings
+#python -m uvicorn main:app --host localhost --port 8000 //command to run the server
