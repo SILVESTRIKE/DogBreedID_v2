@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { userController } from "../controllers/user.controller";
 import { authMiddleware } from "../middlewares/auth.middleware";
-import { roleMiddleware } from "../middlewares/role.middleware";
+import { checkRole } from "../middlewares/role.middleware";
 import validate from "../middlewares/validateRequest.middleware";
 import { UpdateProfileSchema, IdParamsSchema } from "../types/zod/user.zod";
 
@@ -21,13 +21,19 @@ router.delete("/api/users/me", authMiddleware, userController.deleteCurrentUser)
 router.get(
   "/api/users",
   authMiddleware,
-  roleMiddleware("admin"),
+  checkRole(["admin"]),
+  userController.getAllUsers
+);
+router.get(
+  "/api/admin/users",
+  authMiddleware,
+  checkRole(["admin"]),
   userController.getAllUsers
 );
 router.delete(
   "/api/users/:id",
   authMiddleware,
-  roleMiddleware("admin"),
+  checkRole(["admin"]),
   validate(IdParamsSchema),
   userController.adminDeleteUser
 );

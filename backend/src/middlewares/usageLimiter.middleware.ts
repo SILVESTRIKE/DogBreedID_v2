@@ -8,7 +8,7 @@ const ONE_WEEK_IN_MS = 7 * 24 * 60 * 60 * 1000;
 // Giới hạn cho từng vai trò
 const LIMITS = {
   user: {
-    photo: 100, // Cập nhật giới hạn ở đây
+    image: 100, // Cập nhật giới hạn ở đây
     video: 5,
   },
 };
@@ -26,7 +26,7 @@ const guestLimiter = rateLimit({
 });
 
 // 2. Middleware chính, xử lý logic cho người dùng đã đăng nhập
-export const checkUsageLimit = (type: "image" | "video") => {
+export const checkUsageLimit = (allowedTypes: ("image" | "video")[]) => {
   return async (req: Request, res: Response, next: NextFunction) => {
     const user = (req as any).user;
 
@@ -56,15 +56,21 @@ export const checkUsageLimit = (type: "image" | "video") => {
         await dbUser.save();
       }
 
+      // Lấy loại media từ body request
+      const type = req.body.type as 'image' | 'video';
+      if (!type || !allowedTypes.includes(type)) {
+        return next(new BadRequestError(`Loại media không được hỗ trợ. Chỉ chấp nhận: ${allowedTypes.join(', ')}`));
+      }
+
       // Kiểm tra giới hạn
       if (dbUser.role === "user") {
         if (
           type === "image" &&
-          dbUser.photoUploadsThisWeek >= LIMITS.user.photo
+          dbUser.photoUploadsThisWeek >= LIMITS.user.image
         ) {
           return next(
             new TooMuchReqError(
-              `Bạn đã đạt giới hạn ${LIMITS.user.photo} ảnh/tuần.`
+              `Bạn đã đạt giới hạn ${LIMITS.user.image} ảnh/tuần.`
             )
           );
         }
